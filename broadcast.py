@@ -30,7 +30,7 @@ import pickle
 import threading
 import time
 
-from Engineering_libDataQuery import databaseManager
+from ics_sps_engineering_Lib_dataQuery import databaseManager
 
 from myjabberbot import JabberBot, botcmd
 from mythread import StoppableThread
@@ -54,7 +54,7 @@ class BroadcastingJabberBot(JabberBot):
             # set level to INFO
             self.log.setLevel(logging.DEBUG)
             logging.basicConfig(
-                filename='Engineering_JabberBot/log/%s.log' % dt.datetime.now().strftime("%Y-%m-%d_%H-%M"),
+                filename='%s/log/%s.log' % (path, dt.datetime.now().strftime("%Y-%m-%d_%H-%M")),
                 level=logging.DEBUG)
 
         self.parent = parent
