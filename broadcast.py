@@ -277,7 +277,7 @@ class BroadcastingJabberBot(JabberBot):
                 for user in self.users_alarm:
                     self.send(user, message)
 
-        if not 150 < coolerPower_val < 265:
+        if not 70 < coolerPower_val < 265:
             message = "WARNING    Cooler Power : %s  (W)  on    %s" % (str(coolerPower_val), coolerPower_date)
             if self.alarm_ack["cooler"] == False:
                 for user in self.users_alarm:
