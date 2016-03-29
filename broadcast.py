@@ -39,7 +39,7 @@ from mythread import StoppableThread
 class BroadcastingJabberBot(JabberBot):
     """This is a simple broadcasting client. Use "subscribe" to subscribe to broadcasts, "unsubscribe" to unsubscribe and "broadcast" + message to send out a broadcast message. Automatic messages will be sent out all 60 seconds."""
 
-    def __init__(self, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
+    def __init__(self, actor, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
                  kill_bot):
         super(BroadcastingJabberBot, self).__init__(jid, password)
         # create console handler
@@ -63,7 +63,7 @@ class BroadcastingJabberBot(JabberBot):
         self.users_subscribe = users_subscribe
         self.alarm_ack = alarm_ack
         self.message_queue = []
-        self.actor = "xcu_r1__"
+        self.actor = "%s__"%actor
         self.database = databaseManager(ip, port)
         self.t0 = dt.datetime.now()
         self.databaseChecked = False
@@ -317,8 +317,9 @@ class BroadcastingJabberBot(JabberBot):
 class JabberBotManager(threading.Thread):
     """This prevent the JabberBot to be disconnected from server"""
 
-    def __init__(self, path, ip, port, jid, password):
+    def __init__(self, actor, path, ip, port, jid, password):
         super(JabberBotManager, self).__init__()
+        self.actor = actor
         self.path = path
         self.ip = ip
         self.port = port
@@ -335,7 +336,7 @@ class JabberBotManager(threading.Thread):
             self.deleteBot()
             time.sleep(300)
         self.nb_bot.append(
-            BroadcastingJabberBot(self.jid, self.password, self, self.ip, self.port, self.path,
+            BroadcastingJabberBot(self.actor, self.jid, self.password, self, self.ip, self.port, self.path,
                                   self.getuseralarm(), self.getuserSubscribe(), self.getalarmAck(), kill_old))
         self.nb_th.append(StoppableThread(self.nb_bot[-1]))
         self.nb_bot[-1].serve_forever(connect_callback=lambda: self.nb_th[-1].start(),
