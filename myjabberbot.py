@@ -59,6 +59,7 @@ def botcmd(*args, **kwargs):
     """Decorator for bot command functions"""
 
     def decorate(func, hidden=False, name=None, thread=False):
+        print func, args
         setattr(func, '_jabberbot_command', True)
         setattr(func, '_jabberbot_command_hidden', hidden)
         setattr(func, '_jabberbot_command_name', name or func.__name__)
@@ -149,16 +150,18 @@ class JabberBot(object):
                     ('presence', self.callback_presence)])
 
         # Collect commands from source
+
+        self.getCommand()
+        self.roster = None
+
+################################
+    def getCommand(self):
         self.commands = {}
         for name, value in inspect.getmembers(self, inspect.ismethod):
             if getattr(value, '_jabberbot_command', False):
                 name = getattr(value, '_jabberbot_command_name')
                 self.log.info('Registered command: %s' % name)
                 self.commands[self.__command_prefix + name] = value
-
-        self.roster = None
-
-################################
 
     def _send_status(self):
         """Send status to everyone"""
@@ -678,6 +681,7 @@ class JabberBot(object):
         """This function will be called in the main loop."""
         self._idle_ping()
 
+
     def _idle_ping(self):
         """Pings the server, calls on_ping_timeout() on no response.
 
@@ -716,28 +720,30 @@ class JabberBot(object):
         keyboardInt = False
         conn = self.connect()
         if conn:
+            self.servingForever = True
             self.log.info('bot connected. serving forever.')
+            if connect_callback:
+                connect_callback()
+            self.__lastping = time.time()
+
+            while not self.__finished:
+                try:
+                    conn.Process(1)
+                    self.idle_proc()
+                except KeyboardInterrupt:
+                    self.log.info('bot stopped by user request. '\
+                        'shutting down.')
+                    keyboardInt = True
+
+                    break
         else:
             self.log.warn('could not connect to server - aborting.')
-            return
 
-        if connect_callback:
-            connect_callback()
-        self.__lastping = time.time()
 
-        while not self.__finished:
-            try:
-                conn.Process(1)
-                self.idle_proc()
-            except KeyboardInterrupt:
-                self.log.info('bot stopped by user request. '\
-                    'shutting down.')
-                keyboardInt = True
-                
-                break
+
 
         self.shutdown()
-        if disconnect_callback and not keyboardInt and self.databaseChecked:
+        if disconnect_callback and not keyboardInt:
             disconnect_callback()
 
 # vim: expandtab tabstop=4 shiftwidth=4 softtabstop=4

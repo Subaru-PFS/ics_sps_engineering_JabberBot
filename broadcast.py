@@ -29,7 +29,7 @@ import logging
 import pickle
 import threading
 import time
-
+import types
 from ics_sps_engineering_Lib_dataQuery import databaseManager
 
 from myjabberbot import JabberBot, botcmd
@@ -39,8 +39,21 @@ from mythread import StoppableThread
 class BroadcastingJabberBot(JabberBot):
     """This is a simple broadcasting client. Use "subscribe" to subscribe to broadcasts, "unsubscribe" to unsubscribe and "broadcast" + message to send out a broadcast message. Automatic messages will be sent out all 60 seconds."""
 
-    def __init__(self, actor, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
+    def __init__(self, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
                  kill_bot):
+        self.list_function = [('pressure2', 'xcu_r1__pressure', 'val1', 'Pressure (Torr)')]
+        for f, tableName, key, label in self.list_function:
+            self.bindFunction(f, tableName, key, label)
+
+        self.last_ping = time.time()
+        self.servingForever = False
+        self.database = databaseManager(ip, port)
+        if self.database.initDatabase() == 1:
+            self.databaseInitialized = True
+        else:
+            print ("Could not initiate database, check your network")
+            self.databaseInitialized = False
+
         super(BroadcastingJabberBot, self).__init__(jid, password)
         # create console handler
         if not kill_bot:
@@ -63,18 +76,9 @@ class BroadcastingJabberBot(JabberBot):
         self.users_subscribe = users_subscribe
         self.alarm_ack = alarm_ack
         self.message_queue = []
-        self.actor = "%s__"%actor
-        self.database = databaseManager(ip, port)
+        self.actor = "xcu_r1__"
+        self.getCommand()
         self.t0 = dt.datetime.now()
-        self.databaseChecked = False
-
-    def checkDatabase(self):
-        if self.database.initDatabase() == -1:
-            self.log.info("Could not reach database, check your network")
-            self.quit()
-        else:
-            self.log.info("Database OK")
-            self.databaseChecked = True
 
     @botcmd
     def subscribe(self, mess, args):
@@ -131,57 +135,88 @@ class BroadcastingJabberBot(JabberBot):
         else:
             return "Are you kidding me !?"
 
+    def bindFunction(self, funcName, tableName, key, label):
+        @botcmd
+        def func1(self, mess, args):
+            if self.ping_database():
+                date, [val] = self.database.getLastData(tableName, key)
+                return date + "\n %s = %.3e" % (label, val)
+            else:
+                return "I could not reach your database, Let's try again"
+
+        func1.__name__ = funcName
+        setattr(func1, '_jabberbot_command_name', funcName)
+        setattr(self, funcName, types.MethodType(func1, self))
+
+
     @botcmd
     def pressure(self, mess=None, args=None):
         """Get pressure from gauge"""
-        pressure_date, [pressure_val] = self.database.getLastData(self.actor.lower() + "pressure", "val1")
-        val_mbar = 1.33322368 * pressure_val
+        if self.ping_database():
+            pressure_date, [pressure_val] = self.database.getLastData("vistherm__gauge", "pressure")
+            val_mbar = 1.33322368 * pressure_val
 
-        return pressure_date + "\n Pressure (Torr) =%.3e" % pressure_val + "\n Pressure (mBar) = %.3e " % val_mbar
+            return pressure_date + "\n Pressure (Torr) =%.3e" % pressure_val + "\n Pressure (mBar) = %.3e " % val_mbar
+        else:
+            return "I could not reach your database, Let's try again"
 
     @botcmd
     def turbo(self, mess=None, args=None):
         """Get turbo parameters"""
-        turbospeed_date, [turbospeed_val] = self.database.getLastData(self.actor.lower() + "turbospeed", "val1")
-        turbo_date, [turbo_bodytemp, turbo_controllertemp] = self.database.getLastData(
-            self.actor.lower() + "turboTemps", "bodytemp, controllertemp")
+        if self.ping_database():
+            turbospeed_date, [turbospeed_val] = self.database.getLastData(self.actor.lower() + "turbospeed", "val1")
+            turbo_date, [turbo_bodytemp, turbo_controllertemp] = self.database.getLastData(
+                self.actor.lower() + "turboTemps", "bodytemp, controllertemp")
 
-        return turbospeed_date + "\n Turbo Speed(RPM) = %i\n Body Temp(\xe2\x84\x83) = %0.1f\n Controller Temp(\xe2\x84\x83) = %0.1f" % (
-            turbospeed_val, turbo_bodytemp, turbo_controllertemp)
+            return turbospeed_date + "\n Turbo Speed(RPM) = %i\n Body Temp(\xe2\x84\x83) = %0.1f\n Controller Temp(\xe2\x84\x83) = %0.1f" % (
+                turbospeed_val, turbo_bodytemp, turbo_controllertemp)
+        else:
+            return "I could not reach your database, Let's try again"
 
     @botcmd
     def temperature(self, mess=None, args=None):
         """Get data from temperatures sensor"""
-        temps_date, [detect_box, mangin, rod_a, therm_spreader_assy, roc_c, detect_therm_assy1,
-                     detect_therm_assy2] = self.database.getLastData(self.actor.lower() + "temps",
-                                                                     "val1_0, val1_1, val1_2, val1_3, val1_4, val1_10, val1_11")
+        if self.ping_database():
+            temps_date, [detect_box, mangin, rod_a, therm_spreader_assy, roc_c, detect_therm_assy1,
+                         detect_therm_assy2] = self.database.getLastData(self.actor.lower() + "temps",
+                                                                         "val1_0, val1_1, val1_2, val1_3, val1_4, val1_10, val1_11")
 
-        return temps_date + "\n Thermal Spreader Assy(K) = %0.2f\n Rod C(K) = %0.2f\n  Rod A(K) = %0.2f\n Detector Box(K) = %0.2f\n Detector Strap 1(K) = %0.2f\n Detector Strap 2(K) = %0.2f\n Mangin(K) = %0.2f" % (
-            therm_spreader_assy, roc_c, rod_a, detect_box, detect_therm_assy1, detect_therm_assy2, mangin,)
+            return temps_date + "\n Thermal Spreader Assy(K) = %0.2f\n Rod C(K) = %0.2f\n  Rod A(K) = %0.2f\n Detector Box(K) = %0.2f\n Detector Strap 1(K) = %0.2f\n Detector Strap 2(K) = %0.2f\n Mangin(K) = %0.2f" % (
+                therm_spreader_assy, roc_c, rod_a, detect_box, detect_therm_assy1, detect_therm_assy2, mangin,)
+        else:
+            return "I could not reach your database, Let's try again"
 
     @botcmd
     def lam_temps(self, mess=None, args=None):
         """Get data from LAM temperatures sensor"""
-        temps_date, [preamp_board, det_spider_c_in, cold_strap_c_out, cold_strap_c_in, thermal_bar_c, detect_box,
-                     detect_plate, detect_spider_c_out] = self.database.getLastData("vistherm__lamtemps1",
-                                                                                    "val1_0, val1_1, val1_2, val1_3, val1_4, val1_5, val1_6, val1_7")
-        temps_date, [rod_shield_c, tip, detect_actuator, red_tube, corrector_cell, cover_detect, thermal_spreader,
-                     cover_rod_c_up, cover_rod_c_down] = self.database.getLastData("vistherm__lamtemps2",
-                                                                                   "val1_0, val1_1, val1_2, val1_3, val1_4, val1_5, val1_6, val1_7, val1_8")
+        if self.ping_database():
+            temps_date, [preamp_board, det_spider_c_in, cold_strap_c_out, cold_strap_c_in, thermal_bar_c, detect_box,
+                         detect_plate, detect_spider_c_out] = self.database.getLastData("vistherm__lamtemps1",
+                                                                                        "val1_0, val1_1, val1_2, val1_3, val1_4, val1_5, val1_6, val1_7")
+            temps_date, [rod_shield_c, tip, detect_actuator, red_tube, corrector_cell, cover_detect, thermal_spreader,
+                         cover_rod_c_up, cover_rod_c_down] = self.database.getLastData("vistherm__lamtemps2",
+                                                                                       "val1_0, val1_1, val1_2, val1_3, val1_4, val1_5, val1_6, val1_7, val1_8")
 
-        return temps_date + "\n Tip(K) = %0.2f\n Thermal Spreader(K) = %0.2f\n Thermal Bar C(K) = %0.2f\n Cold Strap C IN(K) = %0.2f\n Cold Strap C OUT(K) = %0.2f\n Detect Spider C IN(K) = %0.2f\n Detect Spider C OUT(K) = %0.2f\n Detector Box(K) = %0.2f\n Detector Plate(K) = %0.2f\n Preamp Board(K) = %0.2f\n Cover Detector(K) = %0.2f\n Cover Rod C DOWN(K) = %0.2f\n Cover Rod C UP(K) = %0.2f\n Rod Shield C(K) = %0.2f\n Detect Actuator(K) = %0.2f\n Red Tube(K) = %0.2f\n Corrector Cell(K) = %0.2f" % \
-                            (tip, thermal_spreader, thermal_bar_c, cold_strap_c_in, cold_strap_c_out, det_spider_c_in,
-                             detect_spider_c_out, detect_box, detect_plate, preamp_board, cover_detect,
-                             cover_rod_c_down, cover_rod_c_up, rod_shield_c, detect_actuator, red_tube, corrector_cell)
+            return temps_date + "\n Tip(K) = %0.2f\n Thermal Spreader(K) = %0.2f\n Thermal Bar C(K) = %0.2f\n Cold Strap C IN(K) = %0.2f\n Cold Strap C OUT(K) = %0.2f\n Detect Spider C IN(K) = %0.2f\n Detect Spider C OUT(K) = %0.2f\n Detector Box(K) = %0.2f\n Detector Plate(K) = %0.2f\n Preamp Board(K) = %0.2f\n Cover Detector(K) = %0.2f\n Cover Rod C DOWN(K) = %0.2f\n Cover Rod C UP(K) = %0.2f\n Rod Shield C(K) = %0.2f\n Detect Actuator(K) = %0.2f\n Red Tube(K) = %0.2f\n Corrector Cell(K) = %0.2f" % \
+                                (tip, thermal_spreader, thermal_bar_c, cold_strap_c_in, cold_strap_c_out,
+                                 det_spider_c_in,
+                                 detect_spider_c_out, detect_box, detect_plate, preamp_board, cover_detect,
+                                 cover_rod_c_down, cover_rod_c_up, rod_shield_c, detect_actuator, red_tube,
+                                 corrector_cell)
+        else:
+            return "I could not reach your database, Let's try again"
 
     @botcmd
     def cooler(self, mess=None, args=None):
         """Get Cryocooler parameters"""
-        cooler_date, [cooler_setpoint, cooler_reject, cooler_tip, cooler_power] = self.database.getLastData(
-            self.actor.lower() + "coolertemps", "setpoint, reject, tip, power")
+        if self.ping_database():
+            cooler_date, [cooler_setpoint, cooler_reject, cooler_tip, cooler_power] = self.database.getLastData(
+                self.actor.lower() + "coolertemps", "setpoint, reject, tip, power")
 
-        return cooler_date + "\n Set Point(K) = %i\n Reject(\xe2\x84\x83) = %0.2f\n Collar(K) = %0.2f\n Power(W)= %0.1f" % (
-            cooler_setpoint, cooler_reject, cooler_tip, cooler_power)
+            return cooler_date + "\n Set Point(K) = %i\n Reject(\xe2\x84\x83) = %0.2f\n Collar(K) = %0.2f\n Power(W)= %0.1f" % (
+                cooler_setpoint, cooler_reject, cooler_tip, cooler_power)
+        else:
+            return "I could not reach your database, Let's try again"
 
     # You can use the "hidden" parameter to hide the
     # command from JabberBot's 'help' list
@@ -253,39 +288,43 @@ class BroadcastingJabberBot(JabberBot):
         return txt
 
     def checkCriticalValue(self):
+        if self.ping_database():
+            pressure_date, [pressure_val] = self.database.getLastData("vistherm__gauge", "pressure")
+            turbospeed_date, [turbospeed_val] = self.database.getLastData(self.actor.lower() + "turbospeed", "val1")
+            gatevalve_date, [gatevalve_val] = self.database.getLastData(self.actor.lower() + "gatevalve", "val1")
+            coolerPower_date, [coolerPower_val] = self.database.getLastData(self.actor.lower() + "coolertemps", "power")
 
-        pressure_date, [pressure_val] = self.database.getLastData(self.actor.lower() + "pressure", "val1")
-        turbospeed_date, [turbospeed_val] = self.database.getLastData(self.actor.lower() + "turbospeed", "val1")
-        gatevalve_date, [gatevalve_val] = self.database.getLastData(self.actor.lower() + "gatevalve", "val1")
-        coolerPower_date, [coolerPower_val] = self.database.getLastData(self.actor.lower() + "coolertemps", "power")
+            if float(pressure_val) > 1e-4:
+                message = " WARNING    Pressure :  %s  (Torr)   on    %s" % (
+                    '{:.3e}'.format(pressure_val), pressure_date)
+                if self.alarm_ack["pressure"] == False:
+                    for user in self.users_alarm:
+                        self.send(user, message)
 
-        if float(pressure_val) > 1e-4:
-            message = " WARNING    Pressure :  %s  (Torr)   on    %s" % ('{:.3e}'.format(pressure_val), pressure_date)
-            if self.alarm_ack["pressure"] == False:
-                for user in self.users_alarm:
-                    self.send(user, message)
+            if turbospeed_val < 90000:
+                message = "WARNING    Turbo Speed : %s  (RPM) on   %s" % (str(turbospeed_val), turbospeed_date)
+                if self.alarm_ack["turbo"] == False:
+                    for user in self.users_alarm:
+                        self.send(user, message)
 
-        if turbospeed_val < 90000:
-            message = "WARNING    Turbo Speed : %s  (RPM) on   %s" % (str(turbospeed_val), turbospeed_date)
-            if self.alarm_ack["turbo"] == False:
-                for user in self.users_alarm:
-                    self.send(user, message)
+            if gatevalve_val != 253:
+                message = "WARNING    GateValve not OPENED anymore !  on    %s" % (gatevalve_date)
+                if self.alarm_ack["gatevalve"] == False:
+                    for user in self.users_alarm:
+                        self.send(user, message)
 
-        if gatevalve_val != 253:
-            message = "WARNING    GateValve not OPENED anymore !  on    %s" % (gatevalve_date)
-            if self.alarm_ack["gatevalve"] == False:
-                for user in self.users_alarm:
-                    self.send(user, message)
-
-        if not 70 < coolerPower_val < 265:
-            message = "WARNING    Cooler Power : %s  (W)  on    %s" % (str(coolerPower_val), coolerPower_date)
-            if self.alarm_ack["cooler"] == False:
-                for user in self.users_alarm:
-                    self.send(user, message)
+            if not 70 < coolerPower_val < 265:
+                message = "WARNING    Cooler Power : %s  (W)  on    %s" % (str(coolerPower_val), coolerPower_date)
+                if self.alarm_ack["cooler"] == False:
+                    for user in self.users_alarm:
+                        self.send(user, message)
 
     def idle_proc(self):
-        if not self.databaseChecked:
-            self.checkDatabase()
+
+        if self.PING_FREQUENCY \
+                and time.time() - self.last_ping > self.PING_FREQUENCY:
+            self.ping_database()
+            self.last_ping = time.time()
         self._idle_ping()
         if not len(self.message_queue):
             return
@@ -300,26 +339,35 @@ class BroadcastingJabberBot(JabberBot):
                 self.send(user, message)
 
     def thread_proc(self):
-        if self.databaseChecked:
-            self.checkCriticalValue()
-            if (dt.datetime.now() - self.t0).total_seconds() > 3600:
-                turbo_text = self.turbo()
-                self.message_queue.append(turbo_text)
-                pressure_text = self.pressure()
-                self.message_queue.append(pressure_text)
-                cooler_text = self.cooler()
-                self.message_queue.append(cooler_text)
-                temps_text = self.temperature()
-                self.message_queue.append(temps_text)
-                self.t0 = dt.datetime.now()
+        self.checkCriticalValue()
+        if (dt.datetime.now() - self.t0).total_seconds() > 3600:
+            turbo_text = self.turbo()
+            self.message_queue.append(turbo_text)
+            pressure_text = self.pressure()
+            self.message_queue.append(pressure_text)
+            cooler_text = self.cooler()
+            self.message_queue.append(cooler_text)
+            temps_text = self.temperature()
+            self.message_queue.append(temps_text)
+            self.t0 = dt.datetime.now()
+
+    def ping_database(self):
+        if self.databaseInitialized:
+            date, ping = self.database.getLastData("vistherm__gauge", "pressure")
+            if type(ping) != int:
+                return True
+            else:
+                self.log.info("Could not reach database, check your network")
+                return False
+        else:
+            return False
 
 
 class JabberBotManager(threading.Thread):
     """This prevent the JabberBot to be disconnected from server"""
 
-    def __init__(self, actor, path, ip, port, jid, password):
+    def __init__(self, path, ip, port, jid, password):
         super(JabberBotManager, self).__init__()
-        self.actor = actor
         self.path = path
         self.ip = ip
         self.port = port
@@ -336,7 +384,7 @@ class JabberBotManager(threading.Thread):
             self.deleteBot()
             time.sleep(300)
         self.nb_bot.append(
-            BroadcastingJabberBot(self.actor, self.jid, self.password, self, self.ip, self.port, self.path,
+            BroadcastingJabberBot(self.jid, self.password, self, self.ip, self.port, self.path,
                                   self.getuseralarm(), self.getuserSubscribe(), self.getalarmAck(), kill_old))
         self.nb_th.append(StoppableThread(self.nb_bot[-1]))
         self.nb_bot[-1].serve_forever(connect_callback=lambda: self.nb_th[-1].start(),
@@ -344,13 +392,15 @@ class JabberBotManager(threading.Thread):
 
     def deleteBot(self):
         self.nb_bot[-1].log.info("%s   Deleting bot" % dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+        self.nb_bot[-1].database.closeDatabase()
         self.nb_bot[-1].quit()
-        self.nb_th[-1].join()
+        if self.nb_bot[-1].servingForever:
+            self.nb_th[-1].join()
         del (self.nb_bot[-1])
         del (self.nb_th[-1])
 
     def rebootBot(self):
-        self.initialize_new_bot(kill_old=True, )
+        self.initialize_new_bot(kill_old=True)
 
     def getuseralarm(self):
         with open(self.path + 'list_alarm', 'r') as fichier:
