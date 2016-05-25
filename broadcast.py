@@ -43,7 +43,7 @@ class BroadcastingJabberBot(JabberBot):
     def __init__(self, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
                  kill_bot):
         self.list_function = []
-        self.loadCfg('ics_sps_engineering_JabberBot/curve_config.cfg')
+        self.loadCfg(path.split('ics_sps_engineering_JabberBot')[0]+'ics_sps_engineering_Lib_dataQuery/config/curve_config.cfg')
         for f, tableName, key, label, unit in self.list_function:
             self.bindFunction(f, tableName, key, label, unit)
 
