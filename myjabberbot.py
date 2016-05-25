@@ -59,7 +59,6 @@ def botcmd(*args, **kwargs):
     """Decorator for bot command functions"""
 
     def decorate(func, hidden=False, name=None, thread=False):
-        print func, args
         setattr(func, '_jabberbot_command', True)
         setattr(func, '_jabberbot_command_hidden', hidden)
         setattr(func, '_jabberbot_command_name', name or func.__name__)

@@ -30,8 +30,9 @@ import pickle
 import threading
 import time
 import types
-from ics_sps_engineering_Lib_dataQuery import databaseManager
+import ConfigParser
 
+from ics_sps_engineering_Lib_dataQuery import databaseManager
 from myjabberbot import JabberBot, botcmd
 from mythread import StoppableThread
 
@@ -41,9 +42,10 @@ class BroadcastingJabberBot(JabberBot):
 
     def __init__(self, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
                  kill_bot):
-        self.list_function = [('pressure2', 'xcu_r1__pressure', 'val1', 'Pressure (Torr)')]
-        for f, tableName, key, label in self.list_function:
-            self.bindFunction(f, tableName, key, label)
+        self.list_function = []
+        self.loadCfg('ics_sps_engineering_JabberBot/curve_config.cfg')
+        for f, tableName, key, label, unit in self.list_function:
+            self.bindFunction(f, tableName, key, label, unit)
 
         self.last_ping = time.time()
         self.servingForever = False
@@ -79,6 +81,20 @@ class BroadcastingJabberBot(JabberBot):
         self.actor = "xcu_r1__"
         self.getCommand()
         self.t0 = dt.datetime.now()
+
+    def loadCfg(self, path):
+
+        config = ConfigParser.ConfigParser()
+        config.readfp(open(path))
+        for a in config.sections():
+            tableName = a
+            fname = config.get(a, "bot_cmd")
+            key = config.get(a, 'key')
+            label = config.get(a, 'label')
+            unit = config.get(a, 'unit')
+
+            self.list_function.append((fname, tableName, key, label, unit))
+
 
     @botcmd
     def subscribe(self, mess, args):
@@ -135,88 +151,20 @@ class BroadcastingJabberBot(JabberBot):
         else:
             return "Are you kidding me !?"
 
-    def bindFunction(self, funcName, tableName, key, label):
+    def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
         def func1(self, mess, args):
             if self.ping_database():
-                date, [val] = self.database.getLastData(tableName, key)
-                return date + "\n %s = %.3e" % (label, val)
+                date, vals = self.database.getLastData(tableName, key)
+                fmt = "{:10.3e}" if 'pressure' in funcName.lower() else '{:10.2f}'
+                return date + "".join(
+                    ["\n %s (%s) = %s" % (lab, uni, fmt.format(val)) for lab, uni, val in zip(label.split(','), unit.split(','), vals)])
             else:
                 return "I could not reach your database, Let's try again"
 
         func1.__name__ = funcName
         setattr(func1, '_jabberbot_command_name', funcName)
         setattr(self, funcName, types.MethodType(func1, self))
-
-
-    @botcmd
-    def pressure(self, mess=None, args=None):
-        """Get pressure from gauge"""
-        if self.ping_database():
-            pressure_date, [pressure_val] = self.database.getLastData("vistherm__gauge", "pressure")
-            val_mbar = 1.33322368 * pressure_val
-
-            return pressure_date + "\n Pressure (Torr) =%.3e" % pressure_val + "\n Pressure (mBar) = %.3e " % val_mbar
-        else:
-            return "I could not reach your database, Let's try again"
-
-    @botcmd
-    def turbo(self, mess=None, args=None):
-        """Get turbo parameters"""
-        if self.ping_database():
-            turbospeed_date, [turbospeed_val] = self.database.getLastData(self.actor.lower() + "turbospeed", "val1")
-            turbo_date, [turbo_bodytemp, turbo_controllertemp] = self.database.getLastData(
-                self.actor.lower() + "turboTemps", "bodytemp, controllertemp")
-
-            return turbospeed_date + "\n Turbo Speed(RPM) = %i\n Body Temp(\xe2\x84\x83) = %0.1f\n Controller Temp(\xe2\x84\x83) = %0.1f" % (
-                turbospeed_val, turbo_bodytemp, turbo_controllertemp)
-        else:
-            return "I could not reach your database, Let's try again"
-
-    @botcmd
-    def temperature(self, mess=None, args=None):
-        """Get data from temperatures sensor"""
-        if self.ping_database():
-            temps_date, [detect_box, mangin, rod_a, therm_spreader_assy, roc_c, detect_therm_assy1,
-                         detect_therm_assy2] = self.database.getLastData(self.actor.lower() + "temps",
-                                                                         "val1_0, val1_1, val1_2, val1_3, val1_4, val1_10, val1_11")
-
-            return temps_date + "\n Thermal Spreader Assy(K) = %0.2f\n Rod C(K) = %0.2f\n  Rod A(K) = %0.2f\n Detector Box(K) = %0.2f\n Detector Strap 1(K) = %0.2f\n Detector Strap 2(K) = %0.2f\n Mangin(K) = %0.2f" % (
-                therm_spreader_assy, roc_c, rod_a, detect_box, detect_therm_assy1, detect_therm_assy2, mangin,)
-        else:
-            return "I could not reach your database, Let's try again"
-
-    @botcmd
-    def lam_temps(self, mess=None, args=None):
-        """Get data from LAM temperatures sensor"""
-        if self.ping_database():
-            temps_date, [preamp_board, det_spider_c_in, cold_strap_c_out, cold_strap_c_in, thermal_bar_c, detect_box,
-                         detect_plate, detect_spider_c_out] = self.database.getLastData("vistherm__lamtemps1",
-                                                                                        "val1_0, val1_1, val1_2, val1_3, val1_4, val1_5, val1_6, val1_7")
-            temps_date, [rod_shield_c, tip, detect_actuator, red_tube, corrector_cell, cover_detect, thermal_spreader,
-                         cover_rod_c_up, cover_rod_c_down] = self.database.getLastData("vistherm__lamtemps2",
-                                                                                       "val1_0, val1_1, val1_2, val1_3, val1_4, val1_5, val1_6, val1_7, val1_8")
-
-            return temps_date + "\n Tip(K) = %0.2f\n Thermal Spreader(K) = %0.2f\n Thermal Bar C(K) = %0.2f\n Cold Strap C IN(K) = %0.2f\n Cold Strap C OUT(K) = %0.2f\n Detect Spider C IN(K) = %0.2f\n Detect Spider C OUT(K) = %0.2f\n Detector Box(K) = %0.2f\n Detector Plate(K) = %0.2f\n Preamp Board(K) = %0.2f\n Cover Detector(K) = %0.2f\n Cover Rod C DOWN(K) = %0.2f\n Cover Rod C UP(K) = %0.2f\n Rod Shield C(K) = %0.2f\n Detect Actuator(K) = %0.2f\n Red Tube(K) = %0.2f\n Corrector Cell(K) = %0.2f" % \
-                                (tip, thermal_spreader, thermal_bar_c, cold_strap_c_in, cold_strap_c_out,
-                                 det_spider_c_in,
-                                 detect_spider_c_out, detect_box, detect_plate, preamp_board, cover_detect,
-                                 cover_rod_c_down, cover_rod_c_up, rod_shield_c, detect_actuator, red_tube,
-                                 corrector_cell)
-        else:
-            return "I could not reach your database, Let's try again"
-
-    @botcmd
-    def cooler(self, mess=None, args=None):
-        """Get Cryocooler parameters"""
-        if self.ping_database():
-            cooler_date, [cooler_setpoint, cooler_reject, cooler_tip, cooler_power] = self.database.getLastData(
-                self.actor.lower() + "coolertemps", "setpoint, reject, tip, power")
-
-            return cooler_date + "\n Set Point(K) = %i\n Reject(\xe2\x84\x83) = %0.2f\n Collar(K) = %0.2f\n Power(W)= %0.1f" % (
-                cooler_setpoint, cooler_reject, cooler_tip, cooler_power)
-        else:
-            return "I could not reach your database, Let's try again"
 
     # You can use the "hidden" parameter to hide the
     # command from JabberBot's 'help' list
@@ -267,11 +215,11 @@ class BroadcastingJabberBot(JabberBot):
         """Get all parameters """
         user = mess.getFrom()
         res = ""
-        res += "%s\n" % self.turbo()
-        res += "\n%s\n" % self.pressure()
-        res += "\n%s\n" % self.cooler()
-        res += "\n%s\n" % self.temperature()
-        res += "\n%s" % self.lam_temps()
+        res += "%s\n" % self.pressure(mess, args)
+        res += "\n%s\n" % self.cooler(mess, args)
+        res += "\n%s\n" % self.temperature(mess, args)
+        res += "\n%s\n" % self.lam_temps1(mess, args)
+        res += "\n%s" % self.lam_temps2(mess, args)
         self.send(user, res)
 
     @botcmd(hidden=True)
