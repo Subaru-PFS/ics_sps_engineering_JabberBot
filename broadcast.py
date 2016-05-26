@@ -167,7 +167,7 @@ class BroadcastingJabberBot(JabberBot):
 
     def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
-        def func1(self, mess, args):
+        def func1(self, mess=None, args=None):
             if self.ping_database():
                 date, vals = self.database.getLastData(tableName, key)
                 fmt = "{:10.3e}" if 'pressure' in funcName.lower() else '{:10.2f}'
