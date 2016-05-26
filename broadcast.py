@@ -30,6 +30,7 @@ import pickle
 import threading
 import time
 import types
+import os
 import ConfigParser
 
 from ics_sps_engineering_Lib_dataQuery import databaseManager
@@ -43,7 +44,8 @@ class BroadcastingJabberBot(JabberBot):
     def __init__(self, jid, password, parent, ip, port, path, users_alarm, users_subscribe, alarm_ack,
                  kill_bot):
         self.list_function = []
-        self.loadCfg(path.split('ics_sps_engineering_JabberBot')[0]+'ics_sps_engineering_Lib_dataQuery/config/curve_config.cfg')
+        self.config_path = path.split('ics_sps_engineering_JabberBot')[0]+'ics_sps_engineering_Lib_dataQuery/config/'
+        self.loadCfg(self.config_path)
         for f, tableName, key, label, unit in self.list_function:
             self.bindFunction(f, tableName, key, label, unit)
 
@@ -83,17 +85,29 @@ class BroadcastingJabberBot(JabberBot):
         self.t0 = dt.datetime.now()
 
     def loadCfg(self, path):
-
+        res=[]
         config = ConfigParser.ConfigParser()
-        config.readfp(open(path))
+        all_file = next(os.walk(path))[-1]
+        for f in all_file:
+            config = ConfigParser.ConfigParser()
+            config.readfp(open(path+f))
+            try:
+                date = config.get('config_date', 'date')
+                res.append((f, dt.datetime.strptime(date, "%d/%m/%Y")))
+            except ConfigParser.NoSectionError:
+                pass
+        res.sort(key=lambda tup: tup[1])
+        config = ConfigParser.ConfigParser()
+        config.readfp(open(path+res[-1][0]))
         for a in config.sections():
-            tableName = a
-            fname = config.get(a, "bot_cmd")
-            key = config.get(a, 'key')
-            label = config.get(a, 'label')
-            unit = config.get(a, 'unit')
+            if a != 'config_date':
+                tableName = a
+                fname = config.get(a, "bot_cmd")
+                key = config.get(a, 'key')
+                label = config.get(a, 'label')
+                unit = config.get(a, 'unit')
 
-            self.list_function.append((fname, tableName, key, label, unit))
+                self.list_function.append((fname, tableName, key, label, unit))
 
 
     @botcmd
@@ -158,7 +172,7 @@ class BroadcastingJabberBot(JabberBot):
                 date, vals = self.database.getLastData(tableName, key)
                 fmt = "{:10.3e}" if 'pressure' in funcName.lower() else '{:10.2f}'
                 return date + "".join(
-                    ["\n %s (%s) = %s" % (lab, uni, fmt.format(val)) for lab, uni, val in zip(label.split(','), unit.split(','), vals)])
+                    ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for lab, uni, val in zip(label.split(','), unit.split(','), vals)])
             else:
                 return "I could not reach your database, Let's try again"
 
@@ -289,7 +303,7 @@ class BroadcastingJabberBot(JabberBot):
     def thread_proc(self):
         self.checkCriticalValue()
         if (dt.datetime.now() - self.t0).total_seconds() > 3600:
-            turbo_text = self.turbo()
+            turbo_text = self.turbo_speed()
             self.message_queue.append(turbo_text)
             pressure_text = self.pressure()
             self.message_queue.append(pressure_text)
