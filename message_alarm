@@ -2,12 +2,12 @@
 S'cooler'
 p1
 (lp2
-S'WARNING    Cooler Power : 0.0  (W)  on    03/06/2016 08:58:58'
+S'07/06/2016 11:51:40\n        WARNING !        \nCooler Power (W) :  0\n    OUT OF RANGE !    \n(70 < Power < 250)'
 p3
 asS'pressure'
 p4
 (lp5
-S' WARNING    Pressure :  1.321e-04  (Torr)   on    03/06/2016 08:58:53'
+S'06/06/2016 19:45:17\n     WARNING !     \nPressure (Torr) :  1.013e-04\nNot in range (1.0e-08 < Pressure < 1.0e-04)'
 p6
 asS'gatevalve'
 p7

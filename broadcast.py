@@ -16,14 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#
-# This is an example JabberBot that serves as broadcasting server.
-# Users can subscribe/unsubscribe to messages and send messages 
-# by using "broadcast". It also shows how to send message from 
-# outside the main loop, so you can inject messages into the bot 
-# from other threads or processes, too.
-#
-
 import datetime as dt
 import logging
 import pickle
@@ -39,10 +31,9 @@ from mythread import StoppableThread
 
 
 class BroadcastingJabberBot(JabberBot):
-    """This is a simple broadcasting client. Use "subscribe" to subscribe to broadcasts, "unsubscribe" to unsubscribe and "broadcast" + message to send out a broadcast message. Automatic messages will be sent out all 60 seconds."""
+    """This is a simple broadcasting client """
 
-    def __init__(self, jid, password, parent, ip, port, path, users_alarm, users_subscribe, list_alarm, message_alarm,
-                 kill_bot):
+    def __init__(self, jid, password, parent, ip, port, path, users_alarm, list_alarm, message_alarm, kill_bot):
         self.list_function = []
         self.config_path = path.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery/config/'
         self.loadCfg(self.config_path)
@@ -51,12 +42,12 @@ class BroadcastingJabberBot(JabberBot):
 
         self.last_ping = time.time()
         self.servingForever = False
-        self.database = databaseManager(ip, port)
-        if self.database.initDatabase() == 1:
-            self.databaseInitialized = True
+        self.db = databaseManager(ip, port)
+        if self.db.initDatabase():
+            self.dbInitialized = True
         else:
             print ("Could not initiate database, check your network")
-            self.databaseInitialized = False
+            self.dbInitialized = False
 
         super(BroadcastingJabberBot, self).__init__(jid, password)
         # create console handler
@@ -77,7 +68,6 @@ class BroadcastingJabberBot(JabberBot):
         self.parent = parent
         self.path = path
         self.users_alarm = users_alarm
-        self.users_subscribe = users_subscribe
         self.list_alarm = list_alarm
         self.message_alarm = message_alarm
         self.message_queue = []
@@ -107,36 +97,7 @@ class BroadcastingJabberBot(JabberBot):
                 key = config.get(a, 'key')
                 label = config.get(a, 'label')
                 unit = config.get(a, 'unit')
-
                 self.list_function.append((fname, tableName, key, label, unit))
-
-    @botcmd
-    def subscribe(self, mess, args):
-        """Subscribe to the broadcast list"""
-        user = mess.getFrom()
-        if user in self.users_subscribe:
-            return 'You are already subscribed.'
-        else:
-            self.users_subscribe.append(user)
-            with open(self.path + 'user_subscribe', 'w') as fichier:
-                mon_pickler = pickle.Pickler(fichier)
-                mon_pickler.dump(self.users_subscribe)
-            self.log.info('%s subscribed to the broadcast.' % user)
-            return 'You are now subscribed.'
-
-    @botcmd
-    def unsubscribe(self, mess, args):
-        """Unsubscribe from the broadcast list"""
-        user = mess.getFrom()
-        if not user in self.users_subscribe:
-            return 'You are not subscribed!'
-        else:
-            self.users_subscribe.remove(user)
-            with open(self.path + 'user_subscribe', 'w') as fichier:
-                mon_pickler = pickle.Pickler(fichier)
-                mon_pickler.dump(self.users_subscribe)
-            self.log.info('%s unsubscribed from the broadcast.' % user)
-            return 'You are now unsubscribed.'
 
     @botcmd
     def alarm_mode(self, mess, args):
@@ -165,11 +126,6 @@ class BroadcastingJabberBot(JabberBot):
 
     # You can use the "hidden" parameter to hide the
     # command from JabberBot's 'help' list
-    @botcmd(hidden=True)
-    def broadcast(self, mess, args):
-        """Sends out a broadcast, supply message as arguments (e.g. broadcast hello)"""
-        self.message_queue.append('broadcast: %s (from %s)' % (args, str(mess.getFrom()),))
-        self.log.info('%s sent out a message to %d users.' % (str(mess.getFrom()), len(self.users_subscribe),))
 
     @botcmd
     def alarm_msg(self, mess, args):
@@ -181,28 +137,36 @@ class BroadcastingJabberBot(JabberBot):
     def alarm(self, mess, args):
         """Alarm acknowledgement, arguments : pressure|turbo|gatevalve|cooler """
         args = str(args)
-        device = args.split(' ')[0].strip()
-        command = args.split(' ')[1].strip()
+        device = args.split(' ')[0].strip().lower()
+        command = args.split(' ')[1].strip().lower()
         update_alarm = False
         if device in ["turbo", "cooler", "pressure", "gatevalve"]:
             if command == 'on':
-                self.list_alarm[device] = True
-                with open(self.path + 'list_alarm', 'w') as fichier:
-                    mon_pickler = pickle.Pickler(fichier)
-                    mon_pickler.dump(self.list_alarm)
-                    for user in self.users_alarm:
-                        self.send(user, "Alarm %s activated by %s  on %s" % (
-                            device, str(mess.getFrom().getNode()),
-                            dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                if not self.list_alarm[device]:
+                    self.list_alarm[device] = True
+                    self.message_alarm[device] = []
+                    with open(self.path + 'list_alarm', 'w') as fichier:
+                        mon_pickler = pickle.Pickler(fichier)
+                        mon_pickler.dump(self.list_alarm)
+                        for user in self.users_alarm:
+                            self.send(user, "Alarm %s activated by %s  on %s" % (
+                                device, str(mess.getFrom().getNode()),
+                                dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                else:
+                    return "Alarm %s was already activated " % device
             elif command == 'off':
-                self.list_alarm[device] = False
-                with open(self.path + 'list_alarm', 'w') as fichier:
-                    mon_pickler = pickle.Pickler(fichier)
-                    mon_pickler.dump(self.list_alarm)
-                    for user in self.users_alarm:
-                        self.send(user, "Alarm %s desactivated by %s  on %s" % (
-                            device, str(mess.getFrom().getNode()),
-                            dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                if self.list_alarm[device]:
+                    self.list_alarm[device] = False
+                    with open(self.path + 'list_alarm', 'w') as fichier:
+                        mon_pickler = pickle.Pickler(fichier)
+                        mon_pickler.dump(self.list_alarm)
+                        for user in self.users_alarm:
+                            self.send(user, "Alarm %s desactivated by %s  on %s" % (
+                                device, str(mess.getFrom().getNode()),
+                                dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                else:
+                    return "Alarm %s was already desactivated " % device
+
             elif command == 'ack':
                 self.message_alarm[device] = []
                 for user in self.users_alarm:
@@ -221,11 +185,13 @@ class BroadcastingJabberBot(JabberBot):
         user = mess.getFrom()
         res = ""
         res += "%s\n" % self.pressure(mess, args)
+        res += "\n%s\n" % self.lam_pressure(mess, args)
         res += "\n%s\n" % self.cooler(mess, args)
         res += "\n%s\n" % self.temperature(mess, args)
         res += "\n%s\n" % self.lam_temps1(mess, args)
         res += "\n%s" % self.lam_temps2(mess, args)
-        self.send(user, res)
+
+        return res
 
     @botcmd(hidden=True)
     def reboot_bot(self, mess, args):
@@ -235,21 +201,23 @@ class BroadcastingJabberBot(JabberBot):
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
-        txt = "%s\n %s\n %s\n" % (','.join([str(user.getNode()) for user in self.users_alarm]),
-                                  ','.join([str(user.getNode()) for user in self.users_subscribe]),
-                                  str(self.list_alarm))
-
-        return txt
+        return "%s\n %s\n" % (','.join([str(user.getNode()) for user in self.users_alarm]), str(self.list_alarm))
 
     def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
         def func1(self, mess=None, args=None):
             if self.ping_database():
-                date, vals = self.database.getLastData(tableName, key)
-                formats = ["{:.3e}" if uni.strip() in ['Torr', 'mBar', 'Bar']  else '{:.2f}' for uni in unit.split(',')]
-                return date + "".join(
-                    ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for fmt, lab, uni, val in
-                     zip(formats, label.split(','), unit.split(','), vals)])
+
+                return_values = self.db.getLastData(tableName, key)
+                if type(return_values) is not int:
+                    date, vals = return_values
+                    formats = ["{:.3e}" if uni.strip() in ['Torr', 'mBar', 'Bar'] else '{:.2f}' for uni in
+                               unit.split(',')]
+                    return date + "".join(
+                        ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for fmt, lab, uni, val in
+                         zip(formats, label.split(','), unit.split(','), vals)])
+                else:
+                    return "error code : %i" % return_values
             else:
                 return "I could not reach your database, Let's try again"
 
@@ -259,27 +227,10 @@ class BroadcastingJabberBot(JabberBot):
 
     def checkCriticalValue(self):
         if self.ping_database():
-            pressure_date, [pressure_val] = self.database.getLastData("vistherm__gauge", "pressure")
-            turbospeed_date, [turbospeed_val] = self.database.getLastData(self.actor.lower() + "turbospeed", "val1")
-            gatevalve_date, [gatevalve_val] = self.database.getLastData(self.actor.lower() + "gatevalve", "position")
-            coolerPower_date, [coolerPower_val] = self.database.getLastData(self.actor.lower() + "coolertemps", "power")
-
-            if float(pressure_val) > 1e-4:
-                message = " WARNING    Pressure :  %s  (Torr)   on    %s" % (
-                    '{:.3e}'.format(pressure_val), pressure_date)
-                self.message_alarm["pressure"] = [message]
-
-            if turbospeed_val < 90000:
-                message = "WARNING    Turbo Speed : %s  (RPM) on   %s" % (str(turbospeed_val), turbospeed_date)
-                self.message_alarm["turbo"] = [message]
-
-            if gatevalve_val != 0:
-                message = "WARNING    GateValve not OPENED anymore !  on    %s" % (gatevalve_date)
-                self.message_alarm["gatevalve"] = [message]
-
-            if not 70 < coolerPower_val < 265:
-                message = "WARNING    Cooler Power : %s  (W)  on    %s" % (str(coolerPower_val), coolerPower_date)
-                self.message_alarm["cooler"] = [message]
+            self.checkPressure()
+            self.checkTurbo()
+            self.checkGatevalve()
+            self.checkCooler()
 
             if self.list_alarm["pressure"]:
                 if self.message_alarm["pressure"]:
@@ -305,6 +256,60 @@ class BroadcastingJabberBot(JabberBot):
                 mon_pickler = pickle.Pickler(fichier)
                 mon_pickler.dump(self.message_alarm)
 
+    def checkPressure(self):
+        thresh = 1e-8, 1e-4
+        return_values = self.db.getLastData("vistherm__gauge", "pressure")
+        if type(return_values) is int:
+            self.log.error("Error while checking pressure")
+        else:
+            date, [pressure_val] = return_values
+            if not thresh[0] < pressure_val < thresh[1]:
+                message = "%s\n" \
+                          "        WARNING !        \n" \
+                          "Pressure (Torr) :  %.3e\n"\
+                          "    OUT OF RANGE !    \n(%.1e < Pressure < %.1e)" % (date, pressure_val, thresh[0], thresh[1])
+                self.message_alarm["pressure"] = [message]
+
+    def checkTurbo(self):
+        thresh = 89900, 90100
+        return_values = self.db.getLastData(self.actor.lower() + "turbospeed", "val1")
+        if type(return_values) is int:
+            self.log.error("Error while checking turbo")
+        else:
+            date, [turbospeed_val] = return_values
+            if not thresh[0] < turbospeed_val < thresh[1]:
+                message = "%s\n" \
+                         "        WARNING !        \n" \
+                          "Turbo Speed (RPM) :  %i\n"\
+                          "    OUT OF RANGE !    \n(%i < Speed < %i)" % (date, turbospeed_val, thresh[0], thresh[1])
+                self.message_alarm["turbo"] = [message]
+
+    def checkGatevalve(self):
+        return_values = self.db.getLastData(self.actor.lower() + "gatevalve", "position")
+        if type(return_values) is int:
+            self.log.error("Error while checking gatevalve")
+        else:
+            date, [gatevalve_val] = return_values
+            if gatevalve_val != 0:
+                message = "%s\n" \
+                          "        WARNING !        \n" \
+                          "Gatevalve not OPENED anymore !"% date
+                self.message_alarm["gatevalve"] = [message]
+
+    def checkCooler(self):
+        thresh = 70, 250
+        return_values = self.db.getLastData(self.actor.lower() + "coolertemps", "power")
+        if type(return_values) is int:
+            self.log.error("Error while checking cooler")
+        else:
+            date, [coolerPower_val] = return_values
+            if not thresh[0] < coolerPower_val < thresh[1]:
+                message = "%s\n" \
+                          "        WARNING !        \n" \
+                          "Cooler Power (W) :  %i\n"\
+                          "    OUT OF RANGE !    \n(%i < Power < %i)" % (date, coolerPower_val, thresh[0], thresh[1])
+                self.message_alarm["cooler"] = [message]
+
     def idle_proc(self):
 
         if self.PING_FREQUENCY \
@@ -312,38 +317,17 @@ class BroadcastingJabberBot(JabberBot):
             self.ping_database()
             self.last_ping = time.time()
         self._idle_ping()
-        if not len(self.message_queue):
-            return
-
-        # copy the message queue, then empty it
-        messages = self.message_queue
-        self.message_queue = []
-        for message in messages:
-            if len(self.users_subscribe):
-                self.log.info('sending "%s" to %d user(s).' % (message, len(self.users_subscribe),))
-            for user in self.users_subscribe:
-                self.send(user, message)
 
     def thread_proc(self):
         self.checkCriticalValue()
-        if (dt.datetime.now() - self.t0).total_seconds() > 3600:
-            turbo_text = self.turbo_speed()
-            self.message_queue.append(turbo_text)
-            pressure_text = self.pressure()
-            self.message_queue.append(pressure_text)
-            cooler_text = self.cooler()
-            self.message_queue.append(cooler_text)
-            temps_text = self.temperature()
-            self.message_queue.append(temps_text)
-            self.t0 = dt.datetime.now()
 
     def ping_database(self):
-        if self.databaseInitialized:
-            date, ping = self.database.getLastData("vistherm__gauge", "pressure")
-            if type(ping) != int:
+        if self.dbInitialized:
+            return_values = self.db.getLastData("vistherm__gauge", "pressure")
+            if type(return_values) is not int:
                 return True
             else:
-                self.log.info("Could not reach database, check your network")
+                self.log.error("Could not reach database, check your network")
                 return False
         else:
             return False
@@ -371,15 +355,14 @@ class JabberBotManager(threading.Thread):
             time.sleep(150)
         self.nb_bot.append(
             BroadcastingJabberBot(self.jid, self.password, self, self.ip, self.port, self.path,
-                                  self.getUserAlarm(), self.getuserSubscribe(), self.getlistAlarm(),
-                                  self.getMessageAlarm(), kill_old))
+                                  self.getUserAlarm(), self.getlistAlarm(), self.getMessageAlarm(), kill_old))
         self.nb_th.append(StoppableThread(self.nb_bot[-1]))
         self.nb_bot[-1].serve_forever(connect_callback=lambda: self.nb_th[-1].start(),
                                       disconnect_callback=lambda: self.rebootBot())
 
     def deleteBot(self):
         self.nb_bot[-1].log.info("%s   Deleting bot" % dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-        self.nb_bot[-1].database.closeDatabase()
+        self.nb_bot[-1].db.closeDatabase()
         self.nb_bot[-1].quit()
         if self.nb_bot[-1].servingForever:
             self.nb_th[-1].join()
@@ -390,21 +373,28 @@ class JabberBotManager(threading.Thread):
         self.initialize_new_bot(kill_old=True)
 
     def getUserAlarm(self):
-        with open(self.path + 'user_alarm', 'r') as fichier:
-            mon_depickler = pickle.Unpickler(fichier)
-            return mon_depickler.load()
-
-    def getuserSubscribe(self):
-        with open(self.path + 'user_subscribe', 'r') as fichier:
-            mon_depickler = pickle.Unpickler(fichier)
-            return mon_depickler.load()
+        try:
+            with open(self.path + 'user_alarm', 'r') as fichier:
+                mon_depickler = pickle.Unpickler(fichier)
+                return mon_depickler.load()
+        except IOError:
+            print "creating empty user alarm file"
+            return []
 
     def getlistAlarm(self):
-        with open(self.path + 'list_alarm', 'r') as fichier:
-            mon_depickler = pickle.Unpickler(fichier)
-            return mon_depickler.load()
+        try:
+            with open(self.path + 'list_alarm', 'r') as fichier:
+                mon_depickler = pickle.Unpickler(fichier)
+                return mon_depickler.load()
+        except IOError:
+            print "creating empty list alarm file"
+            return {"pressure": False, "turbo": False, "gatevalve": False, "cooler": False}
 
     def getMessageAlarm(self):
-        with open(self.path + 'message_alarm', 'r') as fichier:
-            mon_depickler = pickle.Unpickler(fichier)
-            return mon_depickler.load()
+        try:
+            with open(self.path + 'message_alarm', 'r') as fichier:
+                mon_depickler = pickle.Unpickler(fichier)
+                return mon_depickler.load()
+        except IOError:
+            print "creating empty message alarm file"
+            return {"pressure": [], "turbo": [], "gatevalve": [], "cooler": []}
