@@ -76,7 +76,6 @@ class BroadcastingJabberBot(JabberBot):
         self.timeout_ack = timeout_ack
         self.actor = "xcu_r1__"
         self.getCommand()
-        self.tellAwake()
 
     def loadCfg(self, path):
         res = []
@@ -426,6 +425,7 @@ class BroadcastingJabberBot(JabberBot):
             self.send(user,
                       "It's %s UTC and I just woke up. \r  Have a nice day or night whatever ..." % dt.datetime.now().strftime(
                           "%H:%M"))
+
 
 
 class JabberBotManager(threading.Thread):
