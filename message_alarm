@@ -2,17 +2,21 @@
 S'cooler'
 p1
 (lp2
-S'07/06/2016 11:51:40\n        WARNING !        \nCooler Power (W) :  0\n    OUT OF RANGE !    \n(70 < Power < 250)'
+S'21/07/2016 14:04:07\n        WARNING !        \nCooler Power (W) :  0\n    OUT OF RANGE !    \n(70 < Power < 250)'
 p3
 asS'pressure'
 p4
 (lp5
-S'06/06/2016 19:45:17\n     WARNING !     \nPressure (Torr) :  1.013e-04\nNot in range (1.0e-08 < Pressure < 1.0e-04)'
+S'21/07/2016 14:04:01\n        WARNING !        \nPressure (Torr) :  4.160e-03\n    OUT OF RANGE !    \n(1.0e-08 < Pressure < 1.0e-04)'
 p6
 asS'gatevalve'
 p7
 (lp8
-sS'turbo'
+S'21/07/2016 11:20:25\n        WARNING !        \nGatevalve not OPENED anymore !'
 p9
-(lp10
-s.
+asS'turbo'
+p10
+(lp11
+S'21/07/2016 11:38:21\n        WARNING !        \nTurbo Speed (RPM) :  89880\n    OUT OF RANGE !    \n(89900 < Speed < 90100)'
+p12
+as.

@@ -25,15 +25,18 @@ import types
 import os
 import ConfigParser
 
-from ics_sps_engineering_Lib_dataQuery import databaseManager
+from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 from myjabberbot import JabberBot, botcmd
 from mythread import StoppableThread
+from datetime import timedelta
+from report import Report
 
 
 class BroadcastingJabberBot(JabberBot):
     """This is a simple broadcasting client """
 
     def __init__(self, jid, password, parent, ip, port, path, users_alarm, list_alarm, message_alarm, timeout_ack,
+                 known_users,
                  kill_bot):
         self.list_function = []
         self.startingTime = dt.datetime.now()
@@ -44,8 +47,9 @@ class BroadcastingJabberBot(JabberBot):
         self.getTimeout()
         self.last_ping = time.time()
         self.servingForever = False
-        self.db = databaseManager(ip, port)
+        self.db = DatabaseManager(ip, port)
         if self.db.initDatabase():
+            print ("Initialization database OK")
             self.dbInitialized = True
         else:
             print ("Could not initiate database, check your network")
@@ -72,6 +76,7 @@ class BroadcastingJabberBot(JabberBot):
         self.users_alarm = users_alarm
         self.list_alarm = list_alarm
         self.message_alarm = message_alarm
+        self.known_users = known_users
         self.message_queue = []
         self.timeout_ack = timeout_ack
         self.actor = "xcu_r1__"
@@ -227,6 +232,7 @@ class BroadcastingJabberBot(JabberBot):
                 return "no such device"
         else:
             return "not enough arguments"
+
     @botcmd
     def all(self, mess, args):
         """Get all parameters """
@@ -240,6 +246,44 @@ class BroadcastingJabberBot(JabberBot):
         res += "\n%s" % self.lam_temps2(mess, args)
 
         return res
+
+    @botcmd
+    def plot(self, mess, args):
+        """send a pdf report to your email address
+           argument : duration in j,h or m
+           ex : plot 1j
+                plot 6h
+                """
+        user = mess.getFrom()
+        if user in self.known_users:
+            ok = False
+            fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes')]
+            for f, kwarg in fmt:
+                try:
+                    val = int(args.split(f)[0])
+                    d = {kwarg: val}
+                    tdelta = timedelta(**d)
+                    ok = True
+                    break
+                except ValueError:
+                    pass
+            if ok:
+                rep = Report(self.db, tdelta, self.known_users[user])
+                return "I've just sent the report to %s" % self.known_users[user]
+            else:
+                return "unknown argument"
+
+        else:
+            return "Do I know you ? Send me your email address by using the command record "
+
+    @botcmd
+    def record(self, mess, args):
+        user = mess.getFrom()
+        self.known_users[user] = args.strip()
+        with open(self.path + 'known_users', 'w') as fichier:
+            mon_pickler = pickle.Pickler(fichier)
+            mon_pickler.dump(self.known_users)
+            return "Thanks ! "
 
     @botcmd(hidden=True)
     def reboot_bot(self, mess, args):
@@ -393,25 +437,26 @@ class BroadcastingJabberBot(JabberBot):
             self.last_time[tableName] = dt.datetime.now()
 
     def checkTimeout(self):
-        for f, tableName, key, label, unit in self.list_function:
-            return_values = self.db.getLastData(tableName, "id")
-            if return_values == -5:
-                self.log.error("Could not reach database, check your network")
-            elif type(return_values) is int:
-                self.log.error("Error keyword : %s" % tableName)
-            else:
-                date, id = return_values
-
-                if date != self.last_date[tableName]:
-                    if self.last_date[tableName] != 0:
-                        if tableName in self.list_timeout:
-                            self.list_timeout.remove(tableName)
-                    self.last_time[tableName] = dt.datetime.now()
-                    self.last_date[tableName] = date
+        if self.dbInitialized:
+            for f, tableName, key, label, unit in self.list_function:
+                return_values = self.db.getLastData(tableName, "id")
+                if return_values == -5:
+                    self.log.error("Could not reach database, check your network")
+                elif type(return_values) is int:
+                    self.log.error("Error keyword : %s" % tableName)
                 else:
-                    if (dt.datetime.now() - self.last_time[tableName]).total_seconds() > self.timeout_limit:
-                        if tableName not in self.list_timeout:
-                            self.list_timeout.append(tableName)
+                    date, id = return_values
+
+                    if date != self.last_date[tableName]:
+                        if self.last_date[tableName] != 0:
+                            if tableName in self.list_timeout:
+                                self.list_timeout.remove(tableName)
+                        self.last_time[tableName] = dt.datetime.now()
+                        self.last_date[tableName] = date
+                    else:
+                        if (dt.datetime.now() - self.last_time[tableName]).total_seconds() > self.timeout_limit:
+                            if tableName not in self.list_timeout:
+                                self.list_timeout.append(tableName)
 
     def sendTimeout(self):
         if (dt.datetime.now() - self.startingTime).total_seconds() > self.timeout_limit:
@@ -425,7 +470,6 @@ class BroadcastingJabberBot(JabberBot):
             self.send(user,
                       "It's %s UTC and I just woke up. \r  Have a nice day or night whatever ..." % dt.datetime.now().strftime(
                           "%H:%M"))
-
 
 
 class JabberBotManager(threading.Thread):
@@ -450,7 +494,8 @@ class JabberBotManager(threading.Thread):
             time.sleep(150)
         self.nb_bot.append(
             BroadcastingJabberBot(self.jid, self.password, self, self.ip, self.port, self.path,
-                                  self.getUserAlarm(), self.getlistAlarm(), self.getMessageAlarm(), self.getTimeout(),
+                                  self.getUserAlarm(), self.getListAlarm(), self.getMessageAlarm(), self.getTimeout(),
+                                  self.getKnownUsers(),
                                   kill_old))
         self.nb_th.append(StoppableThread(self.nb_bot[-1]))
         self.nb_bot[-1].serve_forever(connect_callback=lambda: self.nb_th[-1].start(),
@@ -477,7 +522,7 @@ class JabberBotManager(threading.Thread):
             print "creating empty user alarm file"
             return []
 
-    def getlistAlarm(self):
+    def getListAlarm(self):
         try:
             with open(self.path + 'list_alarm', 'r') as fichier:
                 mon_depickler = pickle.Unpickler(fichier)
@@ -485,6 +530,15 @@ class JabberBotManager(threading.Thread):
         except IOError:
             print "creating empty list alarm file"
             return {"pressure": False, "turbo": False, "gatevalve": False, "cooler": False}
+
+    def getKnownUsers(self):
+        try:
+            with open(self.path + 'known_users', 'r') as fichier:
+                mon_depickler = pickle.Unpickler(fichier)
+                return mon_depickler.load()
+        except IOError:
+            print "creating empty known_users file"
+            return {}
 
     def getMessageAlarm(self):
         try:

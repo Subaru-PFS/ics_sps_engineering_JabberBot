@@ -558,11 +558,11 @@ class JabberBot(object):
             return
 
         # Ignore messages from users not seen by this bot
-        if jid not in self.__seen:
-            self.log.info('Ignoring message from unseen guest: %s' % jid)
-            self.log.debug("I've seen: %s" %
-                           ["%s" % x for x in self.__seen.keys()])
-            return
+        # if jid not in self.__seen:
+        #     self.log.info('Ignoring message from unseen guest: %s' % jid)
+        #     self.log.debug("I've seen: %s" %
+        #                    ["%s" % x for x in self.__seen.keys()])
+        #     return
 
         # Remember the last-talked-in message thread for replies
         # FIXME i am not threadsafe
@@ -680,13 +680,12 @@ class JabberBot(object):
         """This function will be called in the main loop."""
         self._idle_ping()
 
-    def _idle_ping(self):
+    def _idle_ping(self, i=0):
         """Pings the server, calls on_ping_timeout() on no response.
 
         To enable set self.PING_FREQUENCY to a value higher than zero.
         """
-        if self.PING_FREQUENCY \
-                and time.time() - self.__lastping > self.PING_FREQUENCY:
+        if (self.PING_FREQUENCY and time.time() - self.__lastping > self.PING_FREQUENCY) or i > 0:
             self.__lastping = time.time()
             # logging.debug('Pinging the server.')
             ping = xmpp.Protocol('iq', typ='get', \
@@ -695,7 +694,13 @@ class JabberBot(object):
                 res = self.conn.SendAndWaitForResponse(ping, self.PING_TIMEOUT)
                 # logging.debug('Got response: ' + str(res))
                 if res is None:
-                    self.on_ping_timeout()
+                    if i > 5:
+                        self.on_ping_timeout()
+                    else:
+                        print "first timeout (i = %i)" % i
+                        time.sleep(0.5)
+                        self._idle_ping(i + 1)
+
             except IOError, e:
                 logging.error('Error pinging the server: %s, ' \
                               'treating as ping timeout.' % e)
