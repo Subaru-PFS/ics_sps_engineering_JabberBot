@@ -1,3 +1,5 @@
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import ticker
@@ -26,26 +28,27 @@ class Report(object):
         color[i] = (r / 255., g / 255., b / 255.)
 
     def __init__(self, db, timedelta, sendTo):
+        self.reportSent = False
         t0 = dt.datetime.now()
         str_date = (t0 - timedelta).strftime("%d/%m/%Y %H:%M:%S")
         file_name = self.generate_pdf(db, str_date)
-        self.send_pdf(sendTo, file_name)
+        if file_name:
+            self.send_pdf(sendTo, file_name)
 
     def generate_pdf(self, db, str_date):
 
-        cooler_date, cooler_val = db.getDataBetween("xcu_r1__coolertemps", "tip, power", str_date)
-        xcuTemps_date, xcuTemps_val = db.getDataBetween("xcu_r1__temps",
-                                                        "val1_0, val1_1, val1_3, val1_4, val1_10, val1_11", str_date)
-        visthermTemps1_date, visthermTemps1_val = db.getDataBetween("vistherm__lamtemps1",
-                                                                    "val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7",
-                                                                    str_date)
-        visthermTemps2_date, visthermTemps2_val = db.getDataBetween("vistherm__lamtemps2",
-                                                                    "val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7,val1_8",
-                                                                    str_date)
-        visthermGauge_date, visthermGauge_val = db.getDataBetween("vistherm__gauge", "pressure", str_date)
-        xcuIon3_date, xcuIon3_val = db.getDataBetween("xcu_r1__ionpump3", "pressure", str_date)
-        xcuIon4_date, xcuIon4_val = db.getDataBetween("xcu_r1__ionpump4", "pressure", str_date)
-        aitenv_date, aitenv_val = db.getDataBetween("aitenv__aitenv", "val1_0, val1_1", str_date)
+        try :
+            cooler_date, cooler_val = db.getDataBetween("xcu_r1__coolertemps", "tip, power", str_date)
+            xcuTemps_date, xcuTemps_val = db.getDataBetween("xcu_r1__temps","val1_0, val1_1, val1_3, val1_4, val1_10, val1_11", str_date)
+            visthermTemps1_date, visthermTemps1_val = db.getDataBetween("vistherm__lamtemps1","val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7",str_date)
+            visthermTemps2_date, visthermTemps2_val = db.getDataBetween("vistherm__lamtemps2","val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7,val1_8",str_date)
+            visthermGauge_date, visthermGauge_val = db.getDataBetween("vistherm__gauge", "pressure", str_date)
+            xcuIon3_date, xcuIon3_val = db.getDataBetween("xcu_r1__ionpump3", "pressure", str_date)
+            xcuIon4_date, xcuIon4_val = db.getDataBetween("xcu_r1__ionpump4", "pressure", str_date)
+            aitenv_date, aitenv_val = db.getDataBetween("aitenv__aitenv", "val1_0, val1_1", str_date)
+
+        except TypeError:
+            return False
 
         cooler_val = self.checkValues(cooler_val, ["temp_k", "power"])
         xcuTemps_val = self.checkValues(xcuTemps_val, ["temp_k"] * 6)
@@ -257,3 +260,4 @@ class Report(object):
         smtp.login(user, password)
         smtp.sendmail(send_from, [send_to], msg.as_string())
         smtp.close()
+        self.reportSent = True

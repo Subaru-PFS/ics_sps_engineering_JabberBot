@@ -694,7 +694,7 @@ class JabberBot(object):
                 res = self.conn.SendAndWaitForResponse(ping, self.PING_TIMEOUT)
                 # logging.debug('Got response: ' + str(res))
                 if res is None:
-                    if i > 5:
+                    if i > 9:
                         self.on_ping_timeout()
                     else:
                         print "first timeout (i = %i)" % i

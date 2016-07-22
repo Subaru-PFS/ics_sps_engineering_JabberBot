@@ -22,15 +22,15 @@ JID
 p10
 (dp11
 g3
-Vkdohlen
+Vtestlefur
 p12
 sg5
 Vjappix.com
 p13
 sg7
-VAstraChat-iOS-31302968
+VJappix (1468947715597)
 p14
-sbVkjetil.dohlen@lam.fr
+sbV211049@laposte.net
 p15
 s(ixmpp.protocol
 JID
@@ -43,39 +43,39 @@ sg5
 Vjappix.com
 p19
 sg7
-VJappix (1468947715597)
+VJappix (1469099373762)
 p20
-sbV211049@laposte.net
+sbVarnaud.lefur@lam.fr
 p21
 s(ixmpp.protocol
 JID
 p22
 (dp23
 g3
-Vtestlefur
+Vfmadec
 p24
 sg5
 Vjappix.com
 p25
 sg7
-VJappix (1469099373762)
+VandroidMsOpEB4A
 p26
-sbVarnaud.lefur@lam.fr
+sbVfabrice.madec@lam.fr
 p27
 s(ixmpp.protocol
 JID
 p28
 (dp29
 g3
-Vfmadec
+Vtestlefur
 p30
 sg5
 Vjappix.com
 p31
 sg7
-VandroidMsOpEB4A
+VJappix (1468933054857)
 p32
-sbVfabrice.madec@lam.fr
+sbV211049@laposte.net
 p33
 s(ixmpp.protocol
 JID
@@ -88,9 +88,9 @@ sg5
 Vjappix.com
 p37
 sg7
-VJappix (1468933054857)
+VJappix (1469098298921)
 p38
-sbV211049@laposte.net
+sbVarnaud.lefur@lam.fr
 p39
 s(ixmpp.protocol
 JID
@@ -103,9 +103,9 @@ sg5
 Vjappix.com
 p43
 sg7
-VJappix (1469098298921)
+VJappix (1469180464225)
 p44
-sbVarnaud.lefur@lam.fr
+sbV211049@laposte.net
 p45
 s(ixmpp.protocol
 JID
@@ -133,9 +133,9 @@ sg5
 Vjappix.com
 p55
 sg7
-VJappix (1468922012689)
+VJappix (1469172357806)
 p56
-sbVarnaud.lefur@lam.fr
+sbV211049@laposte.net
 p57
 s(ixmpp.protocol
 JID
@@ -163,7 +163,7 @@ sg5
 Vjappix.com
 p67
 sg7
-VJappix (1469096912409)
+VJappix (1468922012689)
 p68
 sbVarnaud.lefur@lam.fr
 p69
@@ -178,8 +178,38 @@ sg5
 Vjappix.com
 p73
 sg7
-VJappix (1468933496226)
+VJappix (1469096912409)
 p74
-sbV211049@laposte.net
+sbVarnaud.lefur@lam.fr
 p75
+s(ixmpp.protocol
+JID
+p76
+(dp77
+g3
+Vkdohlen
+p78
+sg5
+Vjappix.com
+p79
+sg7
+VAstraChat-iOS-31302968
+p80
+sbVkjetil.dohlen@lam.fr
+p81
+s(ixmpp.protocol
+JID
+p82
+(dp83
+g3
+Vtestlefur
+p84
+sg5
+Vjappix.com
+p85
+sg7
+VJappix (1468933496226)
+p86
+sbV211049@laposte.net
+p87
 s.

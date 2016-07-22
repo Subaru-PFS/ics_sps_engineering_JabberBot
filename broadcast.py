@@ -16,19 +16,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import ConfigParser
 import datetime as dt
 import logging
+import os
 import pickle
 import threading
 import time
 import types
-import os
-import ConfigParser
-
+from datetime import timedelta
 from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
+
 from myjabberbot import JabberBot, botcmd
 from mythread import StoppableThread
-from datetime import timedelta
 from report import Report
 
 
@@ -269,7 +269,10 @@ class BroadcastingJabberBot(JabberBot):
                     pass
             if ok:
                 rep = Report(self.db, tdelta, self.known_users[user])
-                return "I've just sent the report to %s" % self.known_users[user]
+                if rep.reportSent:
+                    return "I've just sent the report to %s" % self.known_users[user]
+                else:
+                    return "an error has occured"
             else:
                 return "unknown argument"
 
