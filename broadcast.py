@@ -255,7 +255,7 @@ class BroadcastingJabberBot(JabberBot):
            ex : plot 1j
                 plot 6h
                 """
-        user = mess.getFrom()
+        user = str(mess.getFrom()).split("@jappix.com")[0]
         if user in self.known_users:
             ok = False
             fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes')]
@@ -282,7 +282,7 @@ class BroadcastingJabberBot(JabberBot):
 
     @botcmd
     def record(self, mess, args):
-        user = mess.getFrom()
+        user = str(mess.getFrom()).split("@jappix.com")[0]
         self.known_users[user] = args.strip()
         with open(self.path + 'known_users', 'w') as fichier:
             mon_pickler = pickle.Pickler(fichier)
