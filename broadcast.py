@@ -239,6 +239,7 @@ class BroadcastingJabberBot(JabberBot):
         user = mess.getFrom()
         res = ""
         res += "%s\n" % self.pressure(mess, args)
+        res += "\n%s\n" % self.frontpressure(mess, args)
         res += "\n%s\n" % self.lam_pressure(mess, args)
         res += "\n%s\n" % self.cooler(mess, args)
         res += "\n%s\n" % self.temperature(mess, args)

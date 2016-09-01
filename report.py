@@ -43,6 +43,8 @@ class Report(object):
             visthermTemps1_date, visthermTemps1_val = db.getDataBetween("vistherm__lamtemps1","val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7",str_date)
             visthermTemps2_date, visthermTemps2_val = db.getDataBetween("vistherm__lamtemps2","val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7,val1_8",str_date)
             visthermGauge_date, visthermGauge_val = db.getDataBetween("vistherm__gauge", "pressure", str_date)
+            ionGauge_date, ionGauge_val = db.getDataBetween("xcu_r1__pressure", "val1", str_date)
+            frontGauge_date, frontGauge_val = db.getDataBetween("xcu_r1__roughpressure1", "val1", str_date)
             xcuIon3_date, xcuIon3_val = db.getDataBetween("xcu_r1__ionpump3", "pressure", str_date)
             xcuIon4_date, xcuIon4_val = db.getDataBetween("xcu_r1__ionpump4", "pressure", str_date)
             aitenv_date, aitenv_val = db.getDataBetween("aitenv__aitenv", "val1_0, val1_1", str_date)
@@ -55,7 +57,8 @@ class Report(object):
         visthermGauge_val = self.checkValues(visthermGauge_val, ["pressure"] * 1)
         visthermTemps1_val = self.checkValues(visthermTemps1_val, ["temp_k"] * 8)
         visthermTemps2_val = self.checkValues(visthermTemps2_val, ["temp_k"] * 9)
-
+        ionGauge_val = self.checkValues(ionGauge_val,['pressure'])
+        frontGauge_val = self.checkValues(frontGauge_val,['pressure'])
         xcuIon3_val = self.checkValues(xcuIon3_val, ["pressure"] * 1)
         xcuIon4_val = self.checkValues(xcuIon4_val, ["pressure"] * 1)
         aitenv_val = self.checkValues(aitenv_val, ["temp_c"] * 2)
@@ -64,8 +67,11 @@ class Report(object):
         ax1 = fig1.add_subplot(111)
 
         plot1 = [(visthermGauge_date, visthermGauge_val[:, 0], 'LAM_Gauge', Report.color[0]),
-                 (xcuIon3_date, xcuIon3_val[:, 0], 'Ionpump3', Report.color[1]),
-                 (xcuIon4_date, xcuIon4_val[:, 0], 'Ionpump4', Report.color[2])]
+                 (ionGauge_date, ionGauge_val[:,0], 'Ion_Gauge', Report.color[2]),
+                 (frontGauge_date, frontGauge_val[:,0], 'Front_Gauge', Report.color[4]),
+                 (xcuIon3_date, xcuIon3_val[:, 0], 'Ionpump3', Report.color[10]),
+                 (xcuIon4_date, xcuIon4_val[:, 0], 'Ionpump4', Report.color[12])]
+                 
 
         for date, values, label, col in plot1:
             ax1.plot_date(date, values, '-', label=label, color=col)
@@ -85,7 +91,7 @@ class Report(object):
         box = ax1.get_position()
         ax1.set_position([box.x0, 0.18, box.width, box.height * 0.8])
         lns, labs = self.sortCurve([ax1])
-        ax1.legend(lns, labs, bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=2, mode="expand", borderaxespad=0.,
+        ax1.legend(lns, labs, bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=3, mode="expand", borderaxespad=0.,
                    prop={'size': 11})
         ax1.xaxis.set_major_formatter(DateFormatter(self.getDateFormat(ax1.get_xlim())))
         plt.setp(ax1.xaxis.get_majorticklabels(), rotation=75, horizontalalignment='right')
