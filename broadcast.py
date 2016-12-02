@@ -190,7 +190,8 @@ class BroadcastingJabberBot(JabberBot):
 
     @botcmd
     def timeout(self, mess, args):
-        """timout acknowledgement, arguments :  """
+        """timout acknowledgement, arguments : tableName ack|rearm """
+        print self.list_timeout
         args = str(args)
         if len(args.split(' ')) == 2:
 
@@ -238,13 +239,14 @@ class BroadcastingJabberBot(JabberBot):
         """Get all parameters """
         user = mess.getFrom()
         res = ""
-        res += "%s\n" % self.pressure(mess, args)
-        res += "\n%s\n" % self.frontpressure(mess, args)
-        res += "\n%s\n" % self.lam_pressure(mess, args)
-        res += "\n%s\n" % self.cooler(mess, args)
-        res += "\n%s\n" % self.temperature(mess, args)
-        res += "\n%s\n" % self.lam_temps1(mess, args)
-        res += "\n%s" % self.lam_temps2(mess, args)
+        for attr in ['pressure', 'frontpressure', 'lam_pressure', 
+                     'cooler', 'temperature', 'ccd_temps','lam_temps1', 'lam_temps2']:
+          
+            try:
+                func = getattr(self, attr)
+	        res += "\n%s\n" % func(mess, args)
+            except:
+	        pass
 
         return res
 
@@ -255,7 +257,7 @@ class BroadcastingJabberBot(JabberBot):
            ex : plot 1j
                 plot 6h
                 """
-        user = str(mess.getFrom()).split("@jappix.com")[0]
+        user = mess.getFrom().getNode()
         if user in self.known_users:
             ok = False
             fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes')]
@@ -282,7 +284,7 @@ class BroadcastingJabberBot(JabberBot):
 
     @botcmd
     def record(self, mess, args):
-        user = str(mess.getFrom()).split("@jappix.com")[0]
+        user = mess.getFrom().getNode()
         self.known_users[user] = args.strip()
         with open(self.path + 'known_users', 'w') as fichier:
             mon_pickler = pickle.Pickler(fichier)

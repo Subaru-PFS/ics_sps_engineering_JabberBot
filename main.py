@@ -7,6 +7,6 @@ port = sys.argv[2] if len(sys.argv) > 2 else 5432
 from broadcast import JabberBotManager
 
 # Fill in the JID + Password of your JabberBot here...
-(JID, PASSWORD) = ('pfs@jappix.com', 'xmpp4pfs')
+(JID, PASSWORD) = ('pfs@lam.fr', 'xmpp4pfs')
 
 JabberBotManager(absolute_path, addr, port, JID, PASSWORD)

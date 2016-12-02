@@ -150,6 +150,7 @@ class JabberBot(object):
         # Collect commands from source
 
         self.getCommand()
+
         self.roster = None
 
     ################################
@@ -163,8 +164,9 @@ class JabberBot(object):
 
     def _send_status(self):
         """Send status to everyone"""
-        self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
-                                                status=self.__status))
+        self.conn.send(xmpp.dispatcher.Presence(priority=5, show="available", status=""))
+        #self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
+        #                                        status=self.__status))
 
     def __set_status(self, value):
         """Set status message.
@@ -229,6 +231,7 @@ class JabberBot(object):
 
             # Send initial presence stanza (say hello to everyone)
             self.conn.sendInitPresence()
+
             # Save roster and log Items
             self.roster = self.conn.Roster.getRoster()
             self.log.info('*** roster ***')
@@ -240,7 +243,8 @@ class JabberBot(object):
             for (handler, callback) in self.handlers:
                 self.conn.RegisterHandler(handler, callback)
                 self.log.debug('Registered handler: %s' % handler)
-
+            self.__set_status('chat')
+            self.__set_status(None)
         return self.conn
 
     def join_room(self, room, username=None, password=None):
@@ -298,6 +302,7 @@ class JabberBot(object):
 
     def send_message(self, mess):
         """Send an XMPP message"""
+        self.conn.send(xmpp.dispatcher.Presence(priority=5, show="available", status=""))
         self.connect().send(mess)
 
     def send_tune(self, song, debug=False):
