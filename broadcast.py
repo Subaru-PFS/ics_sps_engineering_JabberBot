@@ -25,6 +25,7 @@ import threading
 import time
 import types
 from datetime import timedelta
+
 from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
 from myjabberbot import JabberBot, botcmd
@@ -239,16 +240,17 @@ class BroadcastingJabberBot(JabberBot):
         """Get all parameters """
         user = mess.getFrom()
         res = ""
-        for attr in ['pressure', 'frontpressure', 'lam_pressure', 
-                     'cooler', 'temperature', 'ccd_temps','lam_temps1', 'lam_temps2']:
-          
+        for attr in ['pressure', 'frontpressure', 'lam_pressure',
+                     'cooler', 'temperature', 'ccd_temps', 'lam_temps1', 'lam_temps2']:
+
             try:
                 func = getattr(self, attr)
-	        res += "\n%s\n" % func(mess, args)
+                res += "\n%s\n" % func(mess, args)
             except:
-	        pass
+                pass
 
         return res
+
 
     @botcmd
     def plot(self, mess, args):
@@ -282,6 +284,7 @@ class BroadcastingJabberBot(JabberBot):
         else:
             return "Do I know you ? Send me your email address by using the command record "
 
+
     @botcmd
     def record(self, mess, args):
         user = mess.getFrom().getNode()
@@ -291,16 +294,19 @@ class BroadcastingJabberBot(JabberBot):
             mon_pickler.dump(self.known_users)
             return "Thanks ! "
 
+
     @botcmd(hidden=True)
     def reboot_bot(self, mess, args):
         """reboot bot """
         self.parent.rebootBot()
+
 
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
         return "%s\n %s\n %s\n" % (
             ','.join([str(user.getNode()) for user in self.users_alarm]), str(self.list_alarm), str(self.list_timeout))
+
 
     def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
@@ -323,6 +329,7 @@ class BroadcastingJabberBot(JabberBot):
         func1.__name__ = funcName
         setattr(func1, '_jabberbot_command_name', funcName)
         setattr(self, funcName, types.MethodType(func1, self))
+
 
     def checkCriticalValue(self):
         if self.ping_database():
@@ -355,6 +362,7 @@ class BroadcastingJabberBot(JabberBot):
                 mon_pickler = pickle.Pickler(fichier)
                 mon_pickler.dump(self.message_alarm)
 
+
     def checkPressure(self):
         thresh = 1e-8, 1e-4
         return_values = self.db.getLastData("vistherm__gauge", "pressure")
@@ -370,6 +378,7 @@ class BroadcastingJabberBot(JabberBot):
                               date, pressure_val, thresh[0], thresh[1])
                 self.message_alarm["pressure"] = [message]
 
+
     def checkTurbo(self):
         thresh = 89900, 90100
         return_values = self.db.getLastData(self.actor.lower() + "turbospeed", "val1")
@@ -384,6 +393,7 @@ class BroadcastingJabberBot(JabberBot):
                           "    OUT OF RANGE !    \n(%i < Speed < %i)" % (date, turbospeed_val, thresh[0], thresh[1])
                 self.message_alarm["turbo"] = [message]
 
+
     def checkGatevalve(self):
         return_values = self.db.getLastData(self.actor.lower() + "gatevalve", "position")
         if type(return_values) is int:
@@ -395,6 +405,7 @@ class BroadcastingJabberBot(JabberBot):
                           "        WARNING !        \n" \
                           "Gatevalve not OPENED anymore !" % date
                 self.message_alarm["gatevalve"] = [message]
+
 
     def checkCooler(self):
         thresh = 70, 250
@@ -410,6 +421,7 @@ class BroadcastingJabberBot(JabberBot):
                           "    OUT OF RANGE !    \n(%i < Power < %i)" % (date, coolerPower_val, thresh[0], thresh[1])
                 self.message_alarm["cooler"] = [message]
 
+
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.last_ping > self.PING_FREQUENCY:
             self.ping_database()
@@ -417,9 +429,11 @@ class BroadcastingJabberBot(JabberBot):
             self.last_ping = time.time()
         self._idle_ping()
 
+
     def thread_proc(self):
         self.checkCriticalValue()
         self.sendTimeout()
+
 
     def ping_database(self):
         if self.dbInitialized:
@@ -432,8 +446,8 @@ class BroadcastingJabberBot(JabberBot):
         else:
             return False
 
-    def getTimeout(self):
 
+    def getTimeout(self):
         self.timeout_limit = 90
         self.list_timeout = [tableName for f, tableName, key, label, unit in self.list_function]
         self.last_date = {}
@@ -441,6 +455,7 @@ class BroadcastingJabberBot(JabberBot):
         for f, tableName, key, label, unit in self.list_function:
             self.last_date[tableName] = 0
             self.last_time[tableName] = dt.datetime.now()
+
 
     def checkTimeout(self):
         if self.dbInitialized:
@@ -464,12 +479,14 @@ class BroadcastingJabberBot(JabberBot):
                             if tableName not in self.list_timeout:
                                 self.list_timeout.append(tableName)
 
+
     def sendTimeout(self):
         if (dt.datetime.now() - self.startingTime).total_seconds() > self.timeout_limit:
             for device in self.list_timeout:
                 if device not in self.timeout_ack:
                     for user in self.users_alarm:
                         self.send(user, "TIME OUT ON %s ! ! ! \r" % device)
+
 
     def tellAwake(self):
         for user in self.users_alarm:
