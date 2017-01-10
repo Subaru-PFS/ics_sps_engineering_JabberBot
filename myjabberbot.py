@@ -302,7 +302,6 @@ class JabberBot(object):
 
     def send_message(self, mess):
         """Send an XMPP message"""
-        self.conn.send(xmpp.dispatcher.Presence(priority=5, show="available", status=""))
         self.connect().send(mess)
 
     def send_tune(self, song, debug=False):

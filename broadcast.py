@@ -43,6 +43,7 @@ class BroadcastingJabberBot(JabberBot):
         self.startingTime = dt.datetime.now()
         self.config_path = path.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery/config/'
         self.loadCfg(self.config_path)
+
         for f, tableName, key, label, unit in self.list_function:
             self.bindFunction(f, tableName, key, label, unit)
         self.getTimeout()
@@ -81,6 +82,7 @@ class BroadcastingJabberBot(JabberBot):
         self.message_queue = []
         self.timeout_ack = timeout_ack
         self.actor = "xcu_r1__"
+        self.loadAlarm()
         self.getCommand()
 
     def loadCfg(self, path):
@@ -105,6 +107,25 @@ class BroadcastingJabberBot(JabberBot):
                 label = config.get(a, 'label')
                 unit = config.get(a, 'unit')
                 self.list_function.append((fname, tableName, key, label, unit))
+
+    def loadAlarm(self):
+        self.criticalDevice = []
+        config = ConfigParser.ConfigParser()
+        config.readfp(open(self.config_path + 'alarm.cfg'))
+        for a in config.sections():
+            dict = {"tableName": a}
+            for b in config.options(a):
+                dict[b] = config.get(a, b)
+            self.criticalDevice.append(dict)
+
+        for device in self.criticalDevice:
+            try:
+                name = device["label"].lower()
+                a = self.list_alarm[name]
+                b = self.message_alarm[name]
+            except KeyError:
+                self.list_alarm[name] = False
+                self.message_alarm[name] = []
 
     @botcmd
     def alarm_mode(self, mess, args):
@@ -142,13 +163,13 @@ class BroadcastingJabberBot(JabberBot):
 
     @botcmd
     def alarm(self, mess, args):
-        """Alarm acknowledgement, arguments : pressure|turbo|gatevalve|cooler """
+        """alarm pressure|turbo|gatevalve|cooler  ack|off|on """
         args = str(args)
         if len(args.split(' ')) == 2:
             device = args.split(' ')[0].strip().lower()
             command = args.split(' ')[1].strip().lower()
-            update_alarm = False
-            if device in ["turbo", "cooler", "pressure", "gatevalve"]:
+
+            if device in self.list_alarm.iterkeys():
                 if command == 'on':
                     if not self.list_alarm[device]:
                         self.list_alarm[device] = True
@@ -191,8 +212,8 @@ class BroadcastingJabberBot(JabberBot):
 
     @botcmd
     def timeout(self, mess, args):
-        """timout acknowledgement, arguments : tableName ack|rearm """
-        print self.list_timeout
+        """timeout tableName ack|rearm """
+
         args = str(args)
         if len(args.split(' ')) == 2:
 
@@ -251,7 +272,6 @@ class BroadcastingJabberBot(JabberBot):
 
         return res
 
-
     @botcmd
     def plot(self, mess, args):
         """send a pdf report to your email address
@@ -284,7 +304,6 @@ class BroadcastingJabberBot(JabberBot):
         else:
             return "Do I know you ? Send me your email address by using the command record "
 
-
     @botcmd
     def record(self, mess, args):
         user = mess.getFrom().getNode()
@@ -294,19 +313,16 @@ class BroadcastingJabberBot(JabberBot):
             mon_pickler.dump(self.known_users)
             return "Thanks ! "
 
-
     @botcmd(hidden=True)
     def reboot_bot(self, mess, args):
         """reboot bot """
         self.parent.rebootBot()
-
 
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
         return "%s\n %s\n %s\n" % (
             ','.join([str(user.getNode()) for user in self.users_alarm]), str(self.list_alarm), str(self.list_timeout))
-
 
     def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
@@ -330,114 +346,47 @@ class BroadcastingJabberBot(JabberBot):
         setattr(func1, '_jabberbot_command_name', funcName)
         setattr(self, funcName, types.MethodType(func1, self))
 
-
     def checkCriticalValue(self):
         if self.ping_database():
-            self.checkPressure()
-            self.checkTurbo()
-            self.checkGatevalve()
-            self.checkCooler()
+            for device in self.criticalDevice:
+                name = device["label"].lower()
+                return_values = self.db.getLastData(device["tableName"], device["key"])
+                if type(return_values) is not int:
+                    date, [val] = return_values
+                    fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"
+                    if not float(device["lower_bound"]) <= val < float(device["higher_bound"]):
+                        msg = "WARNING ! %s OUT OF RANGE \r %s <= %s < %s" % (device["label"],
+                                                                              device["lower_bound"],
+                                                                              fmt.format(val),
+                                                                              device["higher_bound"])
 
-            if self.list_alarm["pressure"]:
-                if self.message_alarm["pressure"]:
-                    for user in self.users_alarm:
-                        self.send(user, self.message_alarm["pressure"][0])
+                        self.message_alarm[name] = [msg]
 
-            if self.list_alarm["turbo"]:
-                if self.message_alarm["turbo"]:
+            for device in self.criticalDevice:
+                name = device["label"].lower()
+                if self.list_alarm[name] and self.message_alarm[name]:
                     for user in self.users_alarm:
-                        self.send(user, self.message_alarm["turbo"][0])
-
-            if self.list_alarm["gatevalve"]:
-                if self.message_alarm["gatevalve"]:
-                    for user in self.users_alarm:
-                        self.send(user, self.message_alarm["gatevalve"][0])
-
-            if self.list_alarm["cooler"]:
-                if self.message_alarm["cooler"]:
-                    for user in self.users_alarm:
-                        self.send(user, self.message_alarm["cooler"][0])
+                        self.send(user, self.message_alarm[name][0])
 
             with open(self.path + 'message_alarm', 'w') as fichier:
                 mon_pickler = pickle.Pickler(fichier)
                 mon_pickler.dump(self.message_alarm)
 
-
-    def checkPressure(self):
-        thresh = 1e-8, 1e-4
-        return_values = self.db.getLastData("vistherm__gauge", "pressure")
-        if type(return_values) is int:
-            self.log.error("Error while checking pressure")
-        else:
-            date, [pressure_val] = return_values
-            if not thresh[0] < pressure_val < thresh[1]:
-                message = "%s\n" \
-                          "        WARNING !        \n" \
-                          "Pressure (Torr) :  %.3e\n" \
-                          "    OUT OF RANGE !    \n(%.1e < Pressure < %.1e)" % (
-                              date, pressure_val, thresh[0], thresh[1])
-                self.message_alarm["pressure"] = [message]
-
-
-    def checkTurbo(self):
-        thresh = 89900, 90100
-        return_values = self.db.getLastData(self.actor.lower() + "turbospeed", "val1")
-        if type(return_values) is int:
-            self.log.error("Error while checking turbo")
-        else:
-            date, [turbospeed_val] = return_values
-            if not thresh[0] < turbospeed_val < thresh[1]:
-                message = "%s\n" \
-                          "        WARNING !        \n" \
-                          "Turbo Speed (RPM) :  %i\n" \
-                          "    OUT OF RANGE !    \n(%i < Speed < %i)" % (date, turbospeed_val, thresh[0], thresh[1])
-                self.message_alarm["turbo"] = [message]
-
-
-    def checkGatevalve(self):
-        return_values = self.db.getLastData(self.actor.lower() + "gatevalve", "position")
-        if type(return_values) is int:
-            self.log.error("Error while checking gatevalve")
-        else:
-            date, [gatevalve_val] = return_values
-            if gatevalve_val != 0:
-                message = "%s\n" \
-                          "        WARNING !        \n" \
-                          "Gatevalve not OPENED anymore !" % date
-                self.message_alarm["gatevalve"] = [message]
-
-
-    def checkCooler(self):
-        thresh = 70, 250
-        return_values = self.db.getLastData(self.actor.lower() + "coolertemps", "power")
-        if type(return_values) is int:
-            self.log.error("Error while checking cooler")
-        else:
-            date, [coolerPower_val] = return_values
-            if not thresh[0] < coolerPower_val < thresh[1]:
-                message = "%s\n" \
-                          "        WARNING !        \n" \
-                          "Cooler Power (W) :  %i\n" \
-                          "    OUT OF RANGE !    \n(%i < Power < %i)" % (date, coolerPower_val, thresh[0], thresh[1])
-                self.message_alarm["cooler"] = [message]
-
-
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.last_ping > self.PING_FREQUENCY:
             self.ping_database()
             self.checkTimeout()
+            self._send_status()
             self.last_ping = time.time()
         self._idle_ping()
-
 
     def thread_proc(self):
         self.checkCriticalValue()
         self.sendTimeout()
 
-
     def ping_database(self):
         if self.dbInitialized:
-            return_values = self.db.getLastData("vistherm__gauge", "pressure")
+            return_values = self.db.getLastData("vistherm__gauge", "secondary")
             if type(return_values) is not int:
                 return True
             else:
@@ -445,7 +394,6 @@ class BroadcastingJabberBot(JabberBot):
                 return False
         else:
             return False
-
 
     def getTimeout(self):
         self.timeout_limit = 90
@@ -455,7 +403,6 @@ class BroadcastingJabberBot(JabberBot):
         for f, tableName, key, label, unit in self.list_function:
             self.last_date[tableName] = 0
             self.last_time[tableName] = dt.datetime.now()
-
 
     def checkTimeout(self):
         if self.dbInitialized:
@@ -479,14 +426,12 @@ class BroadcastingJabberBot(JabberBot):
                             if tableName not in self.list_timeout:
                                 self.list_timeout.append(tableName)
 
-
     def sendTimeout(self):
         if (dt.datetime.now() - self.startingTime).total_seconds() > self.timeout_limit:
             for device in self.list_timeout:
                 if device not in self.timeout_ack:
                     for user in self.users_alarm:
                         self.send(user, "TIME OUT ON %s ! ! ! \r" % device)
-
 
     def tellAwake(self):
         for user in self.users_alarm:
@@ -552,7 +497,7 @@ class JabberBotManager(threading.Thread):
                 return mon_depickler.load()
         except IOError:
             print "creating empty list alarm file"
-            return {"pressure": False, "turbo": False, "gatevalve": False, "cooler": False}
+            return {}
 
     def getKnownUsers(self):
         try:
@@ -570,7 +515,7 @@ class JabberBotManager(threading.Thread):
                 return mon_depickler.load()
         except IOError:
             print "creating empty message alarm file"
-            return {"pressure": [], "turbo": [], "gatevalve": [], "cooler": []}
+            return {}
 
     def getTimeout(self):
         try:
