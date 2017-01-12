@@ -113,7 +113,7 @@ class BroadcastingJabberBot(JabberBot):
         config = ConfigParser.ConfigParser()
         config.readfp(open(self.config_path + 'alarm.cfg'))
         for a in config.sections():
-            dict = {"tableName": a}
+            dict = {"label": a}
             for b in config.options(a):
                 dict[b] = config.get(a, b)
             self.criticalDevice.append(dict)
@@ -350,7 +350,8 @@ class BroadcastingJabberBot(JabberBot):
         if self.ping_database():
             for device in self.criticalDevice:
                 name = device["label"].lower()
-                return_values = self.db.getLastData(device["tableName"], device["key"])
+                return_values = self.db.getLastData(device["tablename"], device["key"])
+                print return_values
                 if type(return_values) is not int:
                     date, [val] = return_values
                     fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"
