@@ -220,39 +220,39 @@ class BroadcastingJabberBot(JabberBot):
             device = args.split(' ')[0].strip().lower()
             command = args.split(' ')[1].strip().lower()
 
-            if device in self.list_timeout:
-                if device in self.timeout_ack:
-                    if command == 'rearm':
-                        self.timeout_ack.remove(device)
-                        with open(self.path + 'timeout_ack', 'w') as fichier:
-                            mon_pickler = pickle.Pickler(fichier)
-                            mon_pickler.dump(self.timeout_ack)
-                            for user in self.users_alarm:
-                                self.send(user, "Timeout rearm on  %s   by %s  on %s" % (
-                                    device, str(mess.getFrom().getNode()),
-                                    dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+            tableNames = [tableName for f, tableName, key, label, unit in self.list_function]
+            if device not in tableNames:
+                return "no such device"
 
-                    elif command == 'ack':
-                        return "Timeout %s was already acknowledge" % device
-                    else:
-                        return "unknown argument"
+            if command == 'rearm':
+                if device in self.timeout_ack:
+                    self.timeout_ack.remove(device)
+                    with open(self.path + 'timeout_ack', 'w') as fichier:
+                        mon_pickler = pickle.Pickler(fichier)
+                        mon_pickler.dump(self.timeout_ack)
+                        for user in self.users_alarm:
+                            self.send(user, "Timeout rearm on  %s   by %s  on %s" % (
+                                device, str(mess.getFrom().getNode()),
+                                dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
 
                 else:
-                    if command == 'ack':
-                        self.timeout_ack.append(device)
-                        with open(self.path + 'timeout_ack', 'w') as fichier:
-                            mon_pickler = pickle.Pickler(fichier)
-                            mon_pickler.dump(self.timeout_ack)
-                            for user in self.users_alarm:
-                                self.send(user, "Timeout ack on  %s   by %s  on %s" % (
-                                    device, str(mess.getFrom().getNode()),
-                                    dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
-                    elif command == 'rearm':
-                        return "Timeout %s was not acknowledge" % device
-                    else:
-                        return "unknown argument"
+                    return "Timeout %s was not acknowledge" % device
+
+            elif command == 'ack':
+                if device not in self.timeout_ack:
+                    self.timeout_ack.append(device)
+                    with open(self.path + 'timeout_ack', 'w') as fichier:
+                        mon_pickler = pickle.Pickler(fichier)
+                        mon_pickler.dump(self.timeout_ack)
+                        for user in self.users_alarm:
+                            self.send(user, "Timeout ack on  %s   by %s  on %s" % (
+                                device, str(mess.getFrom().getNode()),
+                                dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                else:
+                    return "Timeout %s was already acknowledge" % device
             else:
-                return "no such device"
+                return "unknown argument"
+
         else:
             return "not enough arguments"
 
@@ -322,7 +322,7 @@ class BroadcastingJabberBot(JabberBot):
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
         return "%s\n %s\n %s\n" % (
-            ','.join([str(user.getNode()) for user in self.users_alarm]), str(self.list_alarm), str(self.list_timeout))
+            ','.join([str(user.getNode()) for user in self.users_alarm]), str(self.list_alarm), str(self.timeout_ack))
 
     def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
@@ -351,7 +351,7 @@ class BroadcastingJabberBot(JabberBot):
             for device in self.criticalDevice:
                 name = device["label"].lower()
                 return_values = self.db.getLastData(device["tablename"], device["key"])
-                print return_values
+
                 if type(return_values) is not int:
                     date, [val] = return_values
                     fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"

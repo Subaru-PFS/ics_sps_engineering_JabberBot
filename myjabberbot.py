@@ -164,7 +164,7 @@ class JabberBot(object):
 
     def _send_status(self):
         """Send status to everyone"""
-        self.conn.send(xmpp.dispatcher.Presence(priority=5, show="available", status=""))
+        self.conn.send(xmpp.dispatcher.Presence(priority=5, show="available", status=self.__status))
         #self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
         #                                        status=self.__status))
 
