@@ -147,14 +147,13 @@ class JabberBot(object):
         self.handlers = (handlers or [('message', self.callback_message),
                                       ('presence', self.callback_presence)])
 
-        # Collect commands from source
 
-        self.getCommand()
 
         self.roster = None
 
     ################################
-    def getCommand(self):
+    def _getCommand(self):
+        # Collect commands from source
         self.commands = {}
         for name, value in inspect.getmembers(self, inspect.ismethod):
             if getattr(value, '_jabberbot_command', False):
@@ -162,11 +161,11 @@ class JabberBot(object):
                 self.log.info('Registered command: %s' % name)
                 self.commands[self.__command_prefix + name] = value
 
+
     def _send_status(self):
         """Send status to everyone"""
-        self.conn.send(xmpp.dispatcher.Presence(priority=5, show="available", status=self.__status))
-        #self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
-        #                                        status=self.__status))
+        self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
+                                                status=self.__status))
 
     def __set_status(self, value):
         """Set status message.
@@ -231,7 +230,6 @@ class JabberBot(object):
 
             # Send initial presence stanza (say hello to everyone)
             self.conn.sendInitPresence()
-
             # Save roster and log Items
             self.roster = self.conn.Roster.getRoster()
             self.log.info('*** roster ***')
@@ -243,8 +241,7 @@ class JabberBot(object):
             for (handler, callback) in self.handlers:
                 self.conn.RegisterHandler(handler, callback)
                 self.log.debug('Registered handler: %s' % handler)
-            self.__set_status('chat')
-            self.__set_status(None)
+
         return self.conn
 
     def join_room(self, room, username=None, password=None):
@@ -538,7 +535,7 @@ class JabberBot(object):
         text = mess.getBody()
         username = self.get_sender_username(mess)
 
-        if type not in ("groupchat", "chat", "error"):
+        if type not in ("groupchat", "chat"):
             self.log.debug("unhandled message type: %s" % type)
             return
 
@@ -684,12 +681,13 @@ class JabberBot(object):
         """This function will be called in the main loop."""
         self._idle_ping()
 
-    def _idle_ping(self, i=0):
+    def _idle_ping(self):
         """Pings the server, calls on_ping_timeout() on no response.
 
         To enable set self.PING_FREQUENCY to a value higher than zero.
         """
-        if (self.PING_FREQUENCY and time.time() - self.__lastping > self.PING_FREQUENCY) or i > 0:
+        if self.PING_FREQUENCY \
+                and time.time() - self.__lastping > self.PING_FREQUENCY:
             self.__lastping = time.time()
             # logging.debug('Pinging the server.')
             ping = xmpp.Protocol('iq', typ='get', \
@@ -698,13 +696,7 @@ class JabberBot(object):
                 res = self.conn.SendAndWaitForResponse(ping, self.PING_TIMEOUT)
                 # logging.debug('Got response: ' + str(res))
                 if res is None:
-                    if i > 9:
-                        self.on_ping_timeout()
-                    else:
-                        print "first timeout (i = %i)" % i
-                        time.sleep(0.5)
-                        self._idle_ping(i + 1)
-
+                    self.on_ping_timeout()
             except IOError, e:
                 logging.error('Error pinging the server: %s, ' \
                               'treating as ping timeout.' % e)
@@ -724,31 +716,30 @@ class JabberBot(object):
 
     def serve_forever(self, connect_callback=None, disconnect_callback=None):
         """Connects to the server and handles messages."""
-        keyboardInt = False
         conn = self.connect()
         if conn:
-            self.servingForever = True
             self.log.info('bot connected. serving forever.')
             self.tellAwake()
-            if connect_callback:
-                connect_callback()
-            self.__lastping = time.time()
-
-            while not self.__finished:
-                try:
-                    conn.Process(1)
-                    self.idle_proc()
-                except KeyboardInterrupt:
-                    self.log.info('bot stopped by user request. ' \
-                                  'shutting down.')
-                    keyboardInt = True
-
-                    break
         else:
             self.log.warn('could not connect to server - aborting.')
+            return
+
+        if connect_callback:
+            connect_callback()
+        self.__lastping = time.time()
+
+        while not self.__finished:
+            try:
+                conn.Process(1)
+                self.idle_proc()
+            except KeyboardInterrupt:
+                self.log.info('bot stopped by user request. ' \
+                              'shutting down.')
+                break
 
         self.shutdown()
-        if disconnect_callback and not keyboardInt:
+
+        if disconnect_callback:
             disconnect_callback()
 
 # vim: expandtab tabstop=4 shiftwidth=4 softtabstop=4

@@ -1,7 +1,4 @@
 *.pyc
 .idea
 *.log
-list_alarm
-message_alarm
-timeout_ack
 

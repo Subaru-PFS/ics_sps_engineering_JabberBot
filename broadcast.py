@@ -17,115 +17,52 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import ConfigParser
-import datetime as dt
 import logging
 import os
 import pickle
-import threading
 import time
 import types
+from datetime import datetime as dt
 from datetime import timedelta
 
 from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
 from myjabberbot import JabberBot, botcmd
-from mythread import StoppableThread
 from report import Report
 
 
-class BroadcastingJabberBot(JabberBot):
+class PfsJabberBot(JabberBot):
     """This is a simple broadcasting client """
+    TIMEOUT_LIM = 20
 
-    def __init__(self, jid, password, parent, ip, port, path, users_alarm, list_alarm, message_alarm, timeout_ack,
-                 known_users,
-                 kill_bot):
+    def __init__(self, chandler, jid, password, absPath, addr, port):
+
         self.list_function = []
-        self.startingTime = dt.datetime.now()
-        self.config_path = path.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery/config/'
-        self.loadCfg(self.config_path)
-
-        for f, tableName, key, label, unit in self.list_function:
-            self.bindFunction(f, tableName, key, label, unit)
-        self.getTimeout()
+        self.thread_killed = False
+        self.path = absPath
         self.last_ping = time.time()
-        self.servingForever = False
-        self.db = DatabaseManager(ip, port)
-        if self.db.initDatabase():
-            print ("Initialization database OK")
-            self.dbInitialized = True
-        else:
-            print ("Could not initiate database, check your network")
-            self.dbInitialized = False
 
-        super(BroadcastingJabberBot, self).__init__(jid, password)
-        # create console handler
-        if not kill_bot:
-            chandler = logging.StreamHandler()
-            # create formatter
-            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-            # add formatter to handler
-            chandler.setFormatter(formatter)
-            # add handler to loggerZ
-            self.log.addHandler(chandler)
-            # set level to INFO
-            self.log.setLevel(logging.DEBUG)
-            logging.basicConfig(
-                filename='%s/log/%s.log' % (path, dt.datetime.now().strftime("%Y-%m-%d_%H-%M")),
-                level=logging.DEBUG)
+        self.userAlarm = self.getList("userAlarm")
+        self.listAlarm = self.getDict("listAlarm")
+        self.timeoutAck = self.getList("timeoutAck")
+        self.knownUsers = self.getDict("knownUsers")
 
-        self.parent = parent
-        self.path = path
-        self.users_alarm = users_alarm
-        self.list_alarm = list_alarm
-        self.message_alarm = message_alarm
-        self.known_users = known_users
-        self.message_queue = []
-        self.timeout_ack = timeout_ack
-        self.actor = "xcu_r1__"
-        self.loadAlarm()
-        self.getCommand()
+        self.db = DatabaseManager(addr, port)
+        self.db.initDatabase()
 
-    def loadCfg(self, path):
-        res = []
-        all_file = next(os.walk(path))[-1]
-        for f in all_file:
-            config = ConfigParser.ConfigParser()
-            config.readfp(open(path + f))
-            try:
-                date = config.get('config_date', 'date')
-                res.append((f, dt.datetime.strptime(date, "%d/%m/%Y")))
-            except ConfigParser.NoSectionError:
-                pass
-        res.sort(key=lambda tup: tup[1])
-        config = ConfigParser.ConfigParser()
-        config.readfp(open(path + res[-1][0]))
-        for a in config.sections():
-            if a != 'config_date':
-                tableName = a
-                fname = config.get(a, "bot_cmd")
-                key = config.get(a, 'key')
-                label = config.get(a, 'label')
-                unit = config.get(a, 'unit')
-                self.list_function.append((fname, tableName, key, label, unit))
+        config_path = absPath.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery/config/'
+        self.loadCfg(config_path)
+        self.loadAlarm(config_path)
+        self.loadFunctions()
+        self.loadTimeout()
 
-    def loadAlarm(self):
-        self.criticalDevice = []
-        config = ConfigParser.ConfigParser()
-        config.readfp(open(self.config_path + 'alarm.cfg'))
-        for a in config.sections():
-            dict = {"label": a}
-            for b in config.options(a):
-                dict[b] = config.get(a, b)
-            self.criticalDevice.append(dict)
+        JabberBot.__init__(self, jid, password)
+        # add handler to logger
+        self.log.addHandler(chandler)
+        # set level to INFO
+        self.log.setLevel(logging.DEBUG)
 
-        for device in self.criticalDevice:
-            try:
-                name = device["label"].lower()
-                a = self.list_alarm[name]
-                b = self.message_alarm[name]
-            except KeyError:
-                self.list_alarm[name] = False
-                self.message_alarm[name] = []
+        self._getCommand()
 
     @botcmd
     def alarm_mode(self, mess, args):
@@ -134,20 +71,20 @@ class BroadcastingJabberBot(JabberBot):
         if args in ['on', 'off']:
             user = mess.getFrom()
             if args.strip() == 'on':
-                if user not in self.users_alarm:
-                    self.users_alarm.append(user)
+                if user not in self.userAlarm:
+                    self.userAlarm.append(user)
                     msg = "You are on Alarm MODE !"
                 else:
                     msg = "Stop harassing me please !"
             else:
-                if user in self.users_alarm:
-                    self.users_alarm.remove(user)
+                if user in self.userAlarm:
+                    self.userAlarm.remove(user)
                     msg = "You aren't on alarm MODE anymore !"
                 else:
                     msg = "Are you kidding me !?"
-            with open(self.path + 'user_alarm', 'w') as fichier:
+            with open(self.path + 'userAlarm', 'w') as fichier:
                 mon_pickler = pickle.Pickler(fichier)
-                mon_pickler.dump(self.users_alarm)
+                mon_pickler.dump(self.userAlarm)
             return msg
         else:
             return 'unknown args'
@@ -158,50 +95,42 @@ class BroadcastingJabberBot(JabberBot):
     @botcmd
     def alarm_msg(self, mess, args):
         """Sends out a broadcast to users on ALARM, supply message as arguments (e.g. broadcast hello)"""
-        for user in self.users_alarm:
+        for user in self.userAlarm:
             self.send(user, 'broadcast: %s (from %s)' % (args, str(mess.getFrom())))
 
     @botcmd
     def alarm(self, mess, args):
         """alarm pressure|turbo|gatevalve|cooler  ack|off|on """
         args = str(args)
+        kind = {'on': 'activated', 'off': 'desactivated', 'ack': 'acknowledge'}
+
         if len(args.split(' ')) == 2:
             device = args.split(' ')[0].strip().lower()
             command = args.split(' ')[1].strip().lower()
 
-            if device in self.list_alarm.iterkeys():
+            if device in self.listAlarm.iterkeys():
                 if command == 'on':
-                    if not self.list_alarm[device]:
-                        self.list_alarm[device] = True
-                        self.message_alarm[device] = []
-                        with open(self.path + 'list_alarm', 'w') as fichier:
+                    if not self.listAlarm[device]:
+                        self.listAlarm[device] = True
+                        self.messageAlarm[device] = []
+                        with open(self.path + 'listAlarm', 'w') as fichier:
                             mon_pickler = pickle.Pickler(fichier)
-                            mon_pickler.dump(self.list_alarm)
-                            for user in self.users_alarm:
-                                self.send(user, "Alarm %s activated by %s  on %s" % (
-                                    device, str(mess.getFrom().getNode()),
-                                    dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                            mon_pickler.dump(self.listAlarm)
+
                     else:
                         return "Alarm %s was already activated " % device
                 elif command == 'off':
-                    if self.list_alarm[device]:
-                        self.list_alarm[device] = False
-                        with open(self.path + 'list_alarm', 'w') as fichier:
+                    if self.listAlarm[device]:
+                        self.listAlarm[device] = False
+                        with open(self.path + 'listAlarm', 'w') as fichier:
                             mon_pickler = pickle.Pickler(fichier)
-                            mon_pickler.dump(self.list_alarm)
-                            for user in self.users_alarm:
-                                self.send(user, "Alarm %s desactivated by %s  on %s" % (
-                                    device, str(mess.getFrom().getNode()),
-                                    dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                            mon_pickler.dump(self.listAlarm)
+
                     else:
                         return "Alarm %s was already desactivated " % device
 
                 elif command == 'ack':
-                    self.message_alarm[device] = []
-                    for user in self.users_alarm:
-                        self.send(user, "Alarm %s acknowledge by %s  on %s" % (
-                            device, str(mess.getFrom().getNode()),
-                            dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                    self.messageAlarm[device] = []
 
                 else:
                     return "unknown argument"
@@ -209,6 +138,12 @@ class BroadcastingJabberBot(JabberBot):
                 return "no such device"
         else:
             return "not enough arguments"
+
+        for user in self.userAlarm:
+            self.send(user, "Alarm %s %s by %s  on %s" % (device,
+                                                          kind[command],
+                                                          str(mess.getFrom().getNode()),
+                                                          dt.now().strftime("%d/%m/%Y %H:%M:%S")))
 
     @botcmd
     def timeout(self, mess, args):
@@ -225,29 +160,22 @@ class BroadcastingJabberBot(JabberBot):
                 return "no such device"
 
             if command == 'rearm':
-                if device in self.timeout_ack:
-                    self.timeout_ack.remove(device)
-                    with open(self.path + 'timeout_ack', 'w') as fichier:
+                if device in self.timeoutAck:
+                    self.timeoutAck.remove(device)
+                    with open(self.path + 'timeoutAck', 'w') as fichier:
                         mon_pickler = pickle.Pickler(fichier)
-                        mon_pickler.dump(self.timeout_ack)
-                        for user in self.users_alarm:
-                            self.send(user, "Timeout rearm on  %s   by %s  on %s" % (
-                                device, str(mess.getFrom().getNode()),
-                                dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                        mon_pickler.dump(self.timeoutAck)
 
                 else:
                     return "Timeout %s was not acknowledge" % device
 
             elif command == 'ack':
-                if device not in self.timeout_ack:
-                    self.timeout_ack.append(device)
-                    with open(self.path + 'timeout_ack', 'w') as fichier:
+                if device not in self.timeoutAck:
+                    self.timeoutAck.append(device)
+                    with open(self.path + 'timeoutAck', 'w') as fichier:
                         mon_pickler = pickle.Pickler(fichier)
-                        mon_pickler.dump(self.timeout_ack)
-                        for user in self.users_alarm:
-                            self.send(user, "Timeout ack on  %s   by %s  on %s" % (
-                                device, str(mess.getFrom().getNode()),
-                                dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+                        mon_pickler.dump(self.timeoutAck)
+
                 else:
                     return "Timeout %s was already acknowledge" % device
             else:
@@ -255,6 +183,12 @@ class BroadcastingJabberBot(JabberBot):
 
         else:
             return "not enough arguments"
+
+        for user in self.userAlarm:
+            self.send(user, "Timeout %s  on  %s   by %s  on %s" % (device,
+                                                                   command,
+                                                                   str(mess.getFrom().getNode()),
+                                                                   dt.now().strftime("%d/%m/%Y %H:%M:%S")))
 
     @botcmd
     def all(self, mess, args):
@@ -279,8 +213,9 @@ class BroadcastingJabberBot(JabberBot):
            ex : plot 1j
                 plot 6h
                 """
+        tdelta = None
         user = mess.getFrom().getNode()
-        if user in self.known_users:
+        if user in self.knownUsers:
             ok = False
             fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes')]
             for f, kwarg in fmt:
@@ -288,14 +223,13 @@ class BroadcastingJabberBot(JabberBot):
                     val = int(args.split(f)[0])
                     d = {kwarg: val}
                     tdelta = timedelta(**d)
-                    ok = True
                     break
                 except ValueError:
                     pass
-            if ok:
-                rep = Report(self.db, tdelta, self.known_users[user])
+            if tdelta is not None:
+                rep = Report(self.db, tdelta, self.knownUsers[user])
                 if rep.reportSent:
-                    return "I've just sent the report to %s" % self.known_users[user]
+                    return "I've just sent the report to %s" % self.knownUsers[user]
                 else:
                     return "an error has occured"
             else:
@@ -307,222 +241,177 @@ class BroadcastingJabberBot(JabberBot):
     @botcmd
     def record(self, mess, args):
         user = mess.getFrom().getNode()
-        self.known_users[user] = args.strip()
-        with open(self.path + 'known_users', 'w') as fichier:
+        self.knownUsers[user] = args.strip()
+        with open(self.path + 'knowUsers', 'w') as fichier:
             mon_pickler = pickle.Pickler(fichier)
-            mon_pickler.dump(self.known_users)
+            mon_pickler.dump(self.knownUsers)
             return "Thanks ! "
-
-    @botcmd(hidden=True)
-    def reboot_bot(self, mess, args):
-        """reboot bot """
-        self.parent.rebootBot()
 
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
-        return "%s\n %s\n %s\n" % (
-            ','.join([str(user.getNode()) for user in self.users_alarm]), str(self.list_alarm), str(self.timeout_ack))
+        return "%s\n %s\n %s\n" % (','.join([str(user.getNode()) for user in self.userAlarm]),
+                                   str(self.listAlarm),
+                                   str(self.timeoutAck))
+
+    def idle_proc(self):
+        if self.PING_FREQUENCY and time.time() - self.last_ping > self.PING_FREQUENCY:
+            self.checkTimeout()
+            self.checkCriticalValue()
+            self.last_ping = time.time()
+        self._idle_ping()
+
+    def thread_proc(self):
+        t = 60
+        for i in range(int(t // 0.1)):
+            if self.thread_killed:
+                return
+            time.sleep(0.1)
+        self._send_status()
+        self.sendAlert()
+
+    def sendAlert(self):
+
+        for device in self.listTimeout:
+            if device not in self.timeoutAck:
+                for user in self.userAlarm:
+                    self.send(user, "TIME OUT ON %s ! ! ! \r" % device)
+        for device in self.criticalDevice:
+            name = device["label"].lower()
+            if self.listAlarm[name] and self.messageAlarm[name]:
+                for user in self.userAlarm:
+                    self.send(user, self.messageAlarm[name][0])
+
+    def checkCriticalValue(self):
+
+        for device in self.criticalDevice:
+            name = device["label"].lower()
+            return_values = self.db.getLastData(device["tablename"], device["key"])
+
+            if type(return_values) is not int:
+                date, [val] = return_values
+                fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"
+                if not float(device["lower_bound"]) <= val < float(device["higher_bound"]):
+                    msg = "WARNING ! %s OUT OF RANGE \r %s <= %s < %s" % (device["label"],
+                                                                          device["lower_bound"],
+                                                                          fmt.format(val),
+                                                                          device["higher_bound"])
+
+                    self.messageAlarm[name] = [msg]
+
+    def checkTimeout(self):
+
+        for f, tableName, key, label, unit in self.list_function:
+            return_values = self.db.getLastData(tableName, "id")
+            if return_values == -5:
+                self.log.error("Could not reach database, check your network")
+            elif type(return_values) is int:
+                self.log.error("Error keyword : %s" % tableName)
+            else:
+
+                date, id = return_values
+                prev_date, prev_time = self.last_date[tableName]
+                if prev_date != date:
+                    self.last_date[tableName] = date, dt.now()
+                    if tableName in self.listTimeout:
+                        self.listTimeout.remove(tableName)
+                else:
+                    if (dt.now() - prev_time).total_seconds() > PfsJabberBot.TIMEOUT_LIM:
+                        if tableName not in self.listTimeout:
+                            self.listTimeout.append(tableName)
+
+
+    def loadCfg(self, path):
+        res = []
+        all_file = next(os.walk(path))[-1]
+        for f in all_file:
+            config = ConfigParser.ConfigParser()
+            config.readfp(open(path + f))
+            try:
+                date = config.get('config_date', 'date')
+                res.append((f, dt.strptime(date, "%d/%m/%Y")))
+            except ConfigParser.NoSectionError:
+                pass
+        res.sort(key=lambda tup: tup[1])
+        config = ConfigParser.ConfigParser()
+        config.readfp(open(path + res[-1][0]))
+        for a in config.sections():
+            if a != 'config_date':
+                tableName = a
+                fname = config.get(a, "bot_cmd")
+                key = config.get(a, 'key')
+                label = config.get(a, 'label')
+                unit = config.get(a, 'unit')
+                self.list_function.append((fname, tableName, key, label, unit))
+
+    def loadAlarm(self, path):
+        self.criticalDevice = []
+        self.messageAlarm = {}
+        config = ConfigParser.ConfigParser()
+        config.readfp(open(path + 'alarm.cfg'))
+        for a in config.sections():
+            dict = {"label": a}
+            for b in config.options(a):
+                dict[b] = config.get(a, b)
+            self.criticalDevice.append(dict)
+
+        for device in self.criticalDevice:
+            try:
+                name = device["label"].lower()
+                a = self.listAlarm[name]
+            except KeyError:
+                self.listAlarm[name] = False
+
+            self.messageAlarm[name] = []
+
+    def loadTimeout(self):
+        self.listTimeout = []
+        self.last_date = {}
+
+        for f, tableName, key, label, unit in self.list_function:
+            self.last_date[tableName] = 0, dt.now()
 
     def bindFunction(self, funcName, tableName, key, label, unit):
         @botcmd
         def func1(self, mess=None, args=None):
-            if self.ping_database():
-
-                return_values = self.db.getLastData(tableName, key)
-                if type(return_values) is not int:
-                    date, vals = return_values
-                    formats = ["{:.3e}" if uni.strip() in ['Torr', 'mBar', 'Bar'] else '{:.2f}' for uni in
-                               unit.split(',')]
-                    return date + "".join(
-                        ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for fmt, lab, uni, val in
-                         zip(formats, label.split(','), unit.split(','), vals)])
-                else:
-                    return "error code : %i" % return_values
+            return_values = self.db.getLastData(tableName, key)
+            if type(return_values) is not int:
+                date, vals = return_values
+                formats = ["{:.3e}" if uni.strip() in ['Torr', 'mBar', 'Bar'] else '{:.2f}' for uni in
+                           unit.split(',')]
+                return date + "".join(
+                    ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for fmt, lab, uni, val in
+                     zip(formats, label.split(','), unit.split(','), vals)])
             else:
-                return "I could not reach your database, Let's try again"
+                return "error code : %i" % return_values
 
         func1.__name__ = funcName
         setattr(func1, '_jabberbot_command_name', funcName)
         setattr(self, funcName, types.MethodType(func1, self))
 
-    def checkCriticalValue(self):
-        if self.ping_database():
-            for device in self.criticalDevice:
-                name = device["label"].lower()
-                return_values = self.db.getLastData(device["tablename"], device["key"])
-
-                if type(return_values) is not int:
-                    date, [val] = return_values
-                    fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"
-                    if not float(device["lower_bound"]) <= val < float(device["higher_bound"]):
-                        msg = "WARNING ! %s OUT OF RANGE \r %s <= %s < %s" % (device["label"],
-                                                                              device["lower_bound"],
-                                                                              fmt.format(val),
-                                                                              device["higher_bound"])
-
-                        self.message_alarm[name] = [msg]
-
-            for device in self.criticalDevice:
-                name = device["label"].lower()
-                if self.list_alarm[name] and self.message_alarm[name]:
-                    for user in self.users_alarm:
-                        self.send(user, self.message_alarm[name][0])
-
-            with open(self.path + 'message_alarm', 'w') as fichier:
-                mon_pickler = pickle.Pickler(fichier)
-                mon_pickler.dump(self.message_alarm)
-
-    def idle_proc(self):
-        if self.PING_FREQUENCY and time.time() - self.last_ping > self.PING_FREQUENCY:
-            self.ping_database()
-            self.checkTimeout()
-            self._send_status()
-            self.last_ping = time.time()
-        self._idle_ping()
-
-    def thread_proc(self):
-        self.checkCriticalValue()
-        self.sendTimeout()
-
-    def ping_database(self):
-        if self.dbInitialized:
-            return_values = self.db.getLastData("vistherm__gauge", "secondary")
-            if type(return_values) is not int:
-                return True
-            else:
-                self.log.error("Could not reach database, check your network")
-                return False
-        else:
-            return False
-
-    def getTimeout(self):
-        self.timeout_limit = 90
-        self.list_timeout = [tableName for f, tableName, key, label, unit in self.list_function]
-        self.last_date = {}
-        self.last_time = {}
+    def loadFunctions(self):
         for f, tableName, key, label, unit in self.list_function:
-            self.last_date[tableName] = 0
-            self.last_time[tableName] = dt.datetime.now()
-
-    def checkTimeout(self):
-        if self.dbInitialized:
-            for f, tableName, key, label, unit in self.list_function:
-                return_values = self.db.getLastData(tableName, "id")
-                if return_values == -5:
-                    self.log.error("Could not reach database, check your network")
-                elif type(return_values) is int:
-                    self.log.error("Error keyword : %s" % tableName)
-                else:
-                    date, id = return_values
-
-                    if date != self.last_date[tableName]:
-                        if self.last_date[tableName] != 0:
-                            if tableName in self.list_timeout:
-                                self.list_timeout.remove(tableName)
-                        self.last_time[tableName] = dt.datetime.now()
-                        self.last_date[tableName] = date
-                    else:
-                        if (dt.datetime.now() - self.last_time[tableName]).total_seconds() > self.timeout_limit:
-                            if tableName not in self.list_timeout:
-                                self.list_timeout.append(tableName)
-
-    def sendTimeout(self):
-        if (dt.datetime.now() - self.startingTime).total_seconds() > self.timeout_limit:
-            for device in self.list_timeout:
-                if device not in self.timeout_ack:
-                    for user in self.users_alarm:
-                        self.send(user, "TIME OUT ON %s ! ! ! \r" % device)
+            self.bindFunction(f, tableName, key, label, unit)
 
     def tellAwake(self):
-        for user in self.users_alarm:
-            self.send(user,
-                      "It's %s UTC and I just woke up. \r  Have a nice day or night whatever ..." % dt.datetime.now().strftime(
-                          "%H:%M"))
+        for user in self.userAlarm:
+            self.send(user, "It's %s UTC and I just woke up. \r  Have a nice day or night whatever ..." %
+                      dt.now().strftime("%H:%M"))
 
-
-class JabberBotManager(threading.Thread):
-    """This prevent the JabberBot to be disconnected from server"""
-
-    def __init__(self, path, ip, port, jid, password):
-        super(JabberBotManager, self).__init__()
-        self.path = path
-        self.ip = ip
-        self.port = port
-        self.jid = jid
-        self.password = password
-        self.nb_bot = []
-        self.nb_th = []
-        self.start()
-
-        self.initialize_new_bot()
-
-    def initialize_new_bot(self, kill_old=False):
-        if kill_old:
-            self.deleteBot()
-            time.sleep(150)
-        self.nb_bot.append(
-            BroadcastingJabberBot(self.jid, self.password, self, self.ip, self.port, self.path,
-                                  self.getUserAlarm(), self.getListAlarm(), self.getMessageAlarm(), self.getTimeout(),
-                                  self.getKnownUsers(),
-                                  kill_old))
-        self.nb_th.append(StoppableThread(self.nb_bot[-1]))
-        self.nb_bot[-1].serve_forever(connect_callback=lambda: self.nb_th[-1].start(),
-                                      disconnect_callback=lambda: self.rebootBot())
-
-    def deleteBot(self):
-        self.nb_bot[-1].log.info("%s   Deleting bot" % dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-        self.nb_bot[-1].db.closeDatabase()
-        self.nb_bot[-1].quit()
-        if self.nb_bot[-1].servingForever:
-            self.nb_th[-1].join()
-        del (self.nb_bot[-1])
-        del (self.nb_th[-1])
-
-    def rebootBot(self):
-        self.initialize_new_bot(kill_old=True)
-
-    def getUserAlarm(self):
+    def getList(self, filename):
         try:
-            with open(self.path + 'user_alarm', 'r') as fichier:
+            with open(self.path + filename, 'r') as fichier:
                 mon_depickler = pickle.Unpickler(fichier)
                 return mon_depickler.load()
         except IOError:
-            print "creating empty user alarm file"
+            print "creating empty %s file" % filename
             return []
 
-    def getListAlarm(self):
+    def getDict(self, filename):
         try:
-            with open(self.path + 'list_alarm', 'r') as fichier:
+            with open(self.path + filename, 'r') as fichier:
                 mon_depickler = pickle.Unpickler(fichier)
                 return mon_depickler.load()
         except IOError:
-            print "creating empty list alarm file"
+            print "creating empty %s file" % filename
             return {}
-
-    def getKnownUsers(self):
-        try:
-            with open(self.path + 'known_users', 'r') as fichier:
-                mon_depickler = pickle.Unpickler(fichier)
-                return mon_depickler.load()
-        except IOError:
-            print "creating empty known_users file"
-            return {}
-
-    def getMessageAlarm(self):
-        try:
-            with open(self.path + 'message_alarm', 'r') as fichier:
-                mon_depickler = pickle.Unpickler(fichier)
-                return mon_depickler.load()
-        except IOError:
-            print "creating empty message alarm file"
-            return {}
-
-    def getTimeout(self):
-        try:
-            with open(self.path + 'timeout_ack', 'r') as fichier:
-                mon_depickler = pickle.Unpickler(fichier)
-                return mon_depickler.load()
-        except IOError:
-            print "creating timeout_ack file"
-            return []
