@@ -204,7 +204,7 @@ class Report(object):
         ax4.xaxis.set_major_formatter(DateFormatter(self.getDateFormat(ax4.get_xlim())))
         plt.setp(ax4.xaxis.get_majorticklabels(), rotation=75, horizontalalignment='right')
 
-        file_name = 'PFS_AIT_Report_%s.pdf' % dt.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        file_name = '/home/pfs/AIT-PFS/jabberLog/PFS_AIT_Report_%s.pdf' % dt.datetime.now().strftime("%Y-%m-%d_%H-%M")
         with PdfPages(file_name) as pdf:
             pdf.savefig(fig1)
             plt.close()

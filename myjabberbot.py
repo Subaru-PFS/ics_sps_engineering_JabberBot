@@ -89,7 +89,7 @@ class JabberBot(object):
                          'An unexpected error occurred.'
 
     PING_FREQUENCY = 15  # Set to the number of seconds, e.g. 60.
-    PING_TIMEOUT = 2  # Seconds to wait for a response.
+    PING_TIMEOUT = 5  # Seconds to wait for a response.
 
     def __init__(self, username, password, res=None, debug=False,
                  privatedomain=False, acceptownmsgs=False, handlers=None,
@@ -128,7 +128,7 @@ class JabberBot(object):
         """
         # TODO sort this initialisation thematically
         self.__debug = debug
-        self.log = logging.getLogger(__name__)
+        self.log = logging.getLogger("JabberBot.PfsBot")
         self.__username = username
         self.__password = password
         self.jid = xmpp.JID(self.__username)
@@ -147,9 +147,8 @@ class JabberBot(object):
         self.handlers = (handlers or [('message', self.callback_message),
                                       ('presence', self.callback_presence)])
 
-
-
         self.roster = None
+        self.knownJID = {}
 
     ################################
     def _getCommand(self):
@@ -160,7 +159,6 @@ class JabberBot(object):
                 name = getattr(value, '_jabberbot_command_name')
                 self.log.info('Registered command: %s' % name)
                 self.commands[self.__command_prefix + name] = value
-
 
     def _send_status(self):
         """Send status to everyone"""
@@ -361,6 +359,7 @@ class JabberBot(object):
     def build_reply(self, mess, text=None, private=False):
         """Build a message for responding to another message.
         Message is NOT sent"""
+
         response = self.build_message(text)
         if private:
             response.setTo(mess.getFrom())
@@ -441,10 +440,10 @@ class JabberBot(object):
                 self.send(jid, message)
 
     def callback_presence(self, conn, presence):
+
         jid, type_, show, status = presence.getFrom(), \
                                    presence.getType(), presence.getShow(), \
                                    presence.getStatus()
-
         if self.jid.bareMatch(jid):
             # update internal status
             if type_ != self.OFFLINE:
@@ -456,8 +455,8 @@ class JabberBot(object):
             if not self.__acceptownmsgs:
                 # Ignore our own presence messages
                 return
-
         if type_ is None:
+            self.updateJID(jid)
             # Keep track of status message and type changes
             old_show, old_status = self.__seen.get(jid, (self.OFFLINE, None))
             if old_show != show:
@@ -694,6 +693,7 @@ class JabberBot(object):
                                  payload=[xmpp.Node('ping', attrs={'xmlns': 'urn:xmpp:ping'})])
             try:
                 res = self.conn.SendAndWaitForResponse(ping, self.PING_TIMEOUT)
+                self._send_status()
                 # logging.debug('Got response: ' + str(res))
                 if res is None:
                     self.on_ping_timeout()
@@ -719,7 +719,6 @@ class JabberBot(object):
         conn = self.connect()
         if conn:
             self.log.info('bot connected. serving forever.')
-            self.tellAwake()
         else:
             self.log.warn('could not connect to server - aborting.')
             return
@@ -741,5 +740,8 @@ class JabberBot(object):
 
         if disconnect_callback:
             disconnect_callback()
+
+    def get_ping(self):
+        return self.__lastping
 
 # vim: expandtab tabstop=4 shiftwidth=4 softtabstop=4
