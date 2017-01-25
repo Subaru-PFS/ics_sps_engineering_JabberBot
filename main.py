@@ -16,8 +16,8 @@ from pfsbot import PfsBot
 logger = logging.getLogger('JabberBot')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
-#fh = logging.FileHandler('/home/pfs/AIT-PFS/jabberLog/%s.log' % dt.now().strftime("%Y-%m-%d_%H-%M"))
-fh = logging.FileHandler('/home/alefur/AIT-PFS/jabberLog/%s.log' % dt.now().strftime("%Y-%m-%d_%H-%M"))
+fh = logging.FileHandler('/home/pfs/AIT-PFS/jabberLog/%s.log' % dt.now().strftime("%Y-%m-%d_%H-%M"))
+#fh = logging.FileHandler('/home/alefur/AIT-PFS/jabberLog/%s.log' % dt.now().strftime("%Y-%m-%d_%H-%M"))
 fh.setLevel(logging.DEBUG)
 # create console handler with a higher log level
 ch = logging.StreamHandler()

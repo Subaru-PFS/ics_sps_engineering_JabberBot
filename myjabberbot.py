@@ -228,6 +228,7 @@ class JabberBot(object):
 
             # Send initial presence stanza (say hello to everyone)
             self.conn.sendInitPresence()
+            self._send_status()
             # Save roster and log Items
             self.roster = self.conn.Roster.getRoster()
             self.log.info('*** roster ***')
@@ -456,6 +457,7 @@ class JabberBot(object):
                 # Ignore our own presence messages
                 return
         if type_ is None:
+            self._send_status()
             self.updateJID(jid)
             # Keep track of status message and type changes
             old_show, old_status = self.__seen.get(jid, (self.OFFLINE, None))
@@ -481,7 +483,7 @@ class JabberBot(object):
             return
 
         if type_ == 'error':
-            self.log.error(presence.getError())
+            self.log.error("callback_presence"+presence.getError())
 
         self.log.debug('Got presence: %s (type: %s, show: %s, status: %s, ' \
                        'subscription: %s)' % (jid, type_, show, status, subscription))
@@ -693,7 +695,6 @@ class JabberBot(object):
                                  payload=[xmpp.Node('ping', attrs={'xmlns': 'urn:xmpp:ping'})])
             try:
                 res = self.conn.SendAndWaitForResponse(ping, self.PING_TIMEOUT)
-                self._send_status()
                 # logging.debug('Got response: ' + str(res))
                 if res is None:
                     self.on_ping_timeout()
