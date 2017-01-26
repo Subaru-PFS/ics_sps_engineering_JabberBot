@@ -131,11 +131,11 @@ class PfsBot(JabberBot):
                     self.messageAlarm[device] = []
 
                 else:
-                    return "unknown argument"
+                    return "unknown argument, I'm sure you meant on, off or ack"
             else:
-                return "no such device"
+                return "device does not exist ! devices available : \n" + '\n'.join([d for d in self.listAlarm.iterkeys()])
         else:
-            return "not enough arguments"
+            return "not enough arguments, it's 'alarm device on|off|ack|rearm' FYI...  "
         self.sendAlarmMsg("Alarm %s %s by %s  on %s" % (device,
                                                         kind[command],
                                                         str(mess.getFrom().getNode()),
@@ -143,7 +143,7 @@ class PfsBot(JabberBot):
 
     @botcmd
     def timeout(self, mess, args):
-        """timeout tableName ack|rearm """
+        """timeout device ack|rearm """
 
         args = str(args)
         if len(args.split(' ')) == 2:
@@ -151,9 +151,10 @@ class PfsBot(JabberBot):
             device = args.split(' ')[0].strip().lower()
             command = args.split(' ')[1].strip().lower()
 
-            tableNames = [tableName for f, tableName, key, label, unit in self.list_function]
+            tableNames = [tableName for f, tableName, key, label, unit, labelDevice in self.list_function]
+
             if device not in tableNames:
-                return "no such device"
+                return "device does not exist ! devices available : \n" + '\n'.join(tableNames)
 
             if command == 'rearm':
                 if device in self.timeoutAck:
@@ -175,10 +176,10 @@ class PfsBot(JabberBot):
                 else:
                     return "Timeout %s was already acknowledge" % device
             else:
-                return "unknown argument"
+                return "unknown argument, I'm sure you meant ack or rearm"
 
         else:
-            return "not enough arguments"
+            return "not enough arguments, it's 'timeout devices ack|rearm' FYI...  "
 
         self.sendAlarmMsg("Timeout %s  %s   by %s  on %s" % (device,
                                                              command,
@@ -265,7 +266,7 @@ class PfsBot(JabberBot):
 
         for device in self.listTimeout:
             if device not in self.timeoutAck:
-                self.sendAlarmMsg("TIME OUT ON %s ! ! ! \r" % device)
+                self.sendAlarmMsg("TIME OUT ON %s ! ! !" % device)
         for device in self.criticalDevice:
             name = device["label"].lower()
             if self.listAlarm[name] and self.messageAlarm[name]:
@@ -281,16 +282,16 @@ class PfsBot(JabberBot):
                 date, [val] = return_values
                 fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"
                 if not float(device["lower_bound"]) <= val < float(device["higher_bound"]):
-                    msg = "WARNING ! %s OUT OF RANGE \r %s <= %s < %s" % (device["label"],
-                                                                          device["lower_bound"],
-                                                                          fmt.format(val),
-                                                                          device["higher_bound"])
+                    msg = "WARNING ! %s OUT OF RANGE \r\n %s <= %s < %s" % (device["label"],
+                                                                            device["lower_bound"],
+                                                                            fmt.format(val),
+                                                                            device["higher_bound"])
 
                     self.messageAlarm[name] = [msg]
 
     def checkTimeout(self):
 
-        for f, tableName, key, label, unit in self.list_function:
+        for f, tableName, key, label, unit, labelDevice in self.list_function:
             return_values = self.db.getLastData(tableName, "id")
             if return_values == -5:
                 self.log.debug("Could not reach database, check your network")
@@ -310,7 +311,8 @@ class PfsBot(JabberBot):
                             self.listTimeout.append(tableName)
 
     def sendAlarmMsg(self, mess):
-        self.log.debug(mess)
+        for m in mess.split('\r\n'):
+            self.log.debug(m)
         for jid in self.userAlarm.values():
             self.send(jid, mess)
 
@@ -343,7 +345,8 @@ class PfsBot(JabberBot):
                 key = config.get(a, 'key')
                 label = config.get(a, 'label')
                 unit = config.get(a, 'unit')
-                self.list_function.append((fname, tableName, key, label, unit))
+                labelDevice = config.get(a, 'label_device')
+                self.list_function.append((fname, tableName.lower(), key, label, unit, labelDevice))
 
     def loadAlarm(self, path):
         self.criticalDevice = []
@@ -369,10 +372,10 @@ class PfsBot(JabberBot):
         self.listTimeout = []
         self.last_date = {}
 
-        for f, tableName, key, label, unit in self.list_function:
+        for f, tableName, key, label, unit, labelDevice in self.list_function:
             self.last_date[tableName] = 0, dt.now()
 
-    def bindFunction(self, funcName, tableName, key, label, unit):
+    def bindFunction(self, funcName, tableName, key, label, unit, labelDevice):
         @botcmd
         def func1(self, mess=None, args=None):
             return_values = self.db.getLastData(tableName, key)
@@ -380,19 +383,20 @@ class PfsBot(JabberBot):
                 date, vals = return_values
                 formats = ["{:.3e}" if uni.strip() in ['Torr', 'mBar', 'Bar'] else '{:.2f}' for uni in
                            unit.split(',')]
-                return date + "".join(
+                return date + "\n -= %s =-" % labelDevice + "".join(
                     ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for fmt, lab, uni, val in
                      zip(formats, label.split(','), unit.split(','), vals)])
             else:
                 return "error code : %i" % return_values
 
         func1.__name__ = funcName
+        setattr(func1, '__doc__', "Get %s current values" % labelDevice)
         setattr(func1, '_jabberbot_command_name', funcName)
         setattr(self, funcName, types.MethodType(func1, self))
 
     def loadFunctions(self):
-        for f, tableName, key, label, unit in self.list_function:
-            self.bindFunction(f, tableName, key, label, unit)
+        for f, tableName, key, label, unit, labelDevice in self.list_function:
+            self.bindFunction(f, tableName, key, label, unit, labelDevice)
 
     def tellAwake(self):
 
