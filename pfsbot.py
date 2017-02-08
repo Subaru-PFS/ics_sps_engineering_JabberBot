@@ -39,6 +39,8 @@ class PfsBot(JabberBot):
     def __init__(self, jid, password, absPath, addr, port):
         self.log = logging.getLogger('JabberBot.PfsBot')
 
+        self.db_addr = addr
+        self.db_port = port
         self.list_function = []
         self.thread_killed = False
         self.path = absPath
@@ -202,6 +204,12 @@ class PfsBot(JabberBot):
 
         return res
 
+
+    def constructPlot(self, mess, args, tdelta):
+        user = mess.getFrom()
+        rep = Report(self, tdelta, user)
+        rep.start()
+
     @botcmd
     def plot(self, mess, args):
         """send a pdf report to your email address
@@ -209,6 +217,7 @@ class PfsBot(JabberBot):
            ex : plot 1j
                 plot 6h
                 """
+
         tdelta = None
         user = mess.getFrom().getNode()
         if user in self.knownUsers:
@@ -223,11 +232,8 @@ class PfsBot(JabberBot):
                 except ValueError:
                     pass
             if tdelta is not None:
-                rep = Report(self.db, tdelta, self.knownUsers[user])
-                if rep.reportSent:
-                    return "I've just sent the report to %s" % self.knownUsers[user]
-                else:
-                    return "an error has occured"
+                self.constructPlot(mess, args, tdelta)
+                return "Generating the report ..."
             else:
                 return "unknown argument"
 
