@@ -45,6 +45,7 @@ class PfsBot(JabberBot):
         self.thread_killed = False
         self.path = absPath
         self.last_alert = time.time()
+        self.last_awake = time.time()
 
         self.userAlarm = self.unPickle("userAlarm")
         self.listAlarm = self.unPickle("listAlarm")
@@ -264,6 +265,11 @@ class PfsBot(JabberBot):
         if self.PING_FREQUENCY and time.time() - self.last_alert > self.ALERT_FREQ:
             self.sendAlert()
             self.last_alert = time.time()
+
+        if self.PING_FREQUENCY and time.time() - self.last_awake > 6:
+            self._send_status()
+            self.last_awake = time.time()
+
 
     def thread_proc(self):
         pass
