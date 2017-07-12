@@ -483,7 +483,7 @@ class JabberBot(object):
             return
 
         if type_ == 'error':
-            self.log.error("callback_presence"+presence.getError())
+            self.log.error("callback_presence" + presence.getError())
 
         self.log.debug('Got presence: %s (type: %s, show: %s, status: %s, ' \
                        'subscription: %s)' % (jid, type_, show, status, subscription))
@@ -732,9 +732,11 @@ class JabberBot(object):
             try:
                 conn.Process(1)
                 self.idle_proc()
+            except xmpp.protocol.SystemShutdown:
+                self.log.warn('System shutdown')
+                break
             except KeyboardInterrupt:
-                self.log.info('bot stopped by user request. ' \
-                              'shutting down.')
+                self.log.info('bot stopped by user request. shutting down.')
                 break
 
         self.shutdown()
