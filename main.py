@@ -47,7 +47,7 @@ try:
             bc.thread_killed = True
             logger.debug("PfsBot has finished")
         else:
-            logger.debug("Failed to ping xmpp.osupytheas.fr" % dt.now().strftime("%Y-%m-%d_%H-%M"))
+            logger.debug("Failed to ping xmpp.osupytheas.fr")
             time.sleep(10)
 except KeyboardInterrupt:
     print 'interrupted!'
