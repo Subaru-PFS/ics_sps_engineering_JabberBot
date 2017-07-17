@@ -36,11 +36,12 @@ class PfsBot(JabberBot):
     TIMEOUT_LIM = 90
     ALERT_FREQ = 60
 
-    def __init__(self, jid, password, absPath, addr, port):
+    def __init__(self, jid, password, absPath, addr, port, actorList):
         self.log = logging.getLogger('JabberBot.PfsBot')
 
         self.db_addr = addr
         self.db_port = port
+        self.actorList = actorList
         self.list_function = []
         self.thread_killed = False
         self.path = absPath
@@ -64,6 +65,10 @@ class PfsBot(JabberBot):
         JabberBot.__init__(self, jid, password)
 
         self._getCommand()
+
+    @property
+    def cam(self):
+        return self.actorList[-1].split('__')[-1].split('_')[-1]
 
     @botcmd
     def alarm_mode(self, mess, args):
@@ -108,7 +113,8 @@ class PfsBot(JabberBot):
         if len(args.split(' ')) == 2:
             device = args.split(' ')[0].strip().lower()
             command = args.split(' ')[1].strip().lower()
-
+            if device not in self.listAlarm.iterkeys():
+                device = '%s-%s' % (device, self.cam)
             if device in self.listAlarm.iterkeys():
                 if command == 'on':
                     if not self.listAlarm[device]:
@@ -136,7 +142,8 @@ class PfsBot(JabberBot):
                 else:
                     return "unknown argument, I'm sure you meant on, off or ack"
             else:
-                return "device does not exist ! devices available : \n" + '\n'.join([d for d in self.listAlarm.iterkeys()])
+                return "device does not exist ! devices available : \n" + '\n'.join(
+                    [d for d in self.listAlarm.iterkeys()])
         else:
             return "not enough arguments, it's 'alarm device on|off|ack|rearm' FYI...  "
         self.sendAlarmMsg("Alarm %s %s by %s  on %s" % (device,
@@ -205,7 +212,6 @@ class PfsBot(JabberBot):
 
         return res
 
-
     def constructPlot(self, mess, args, tdelta):
         user = mess.getFrom()
         rep = Report(self, tdelta, user)
@@ -270,18 +276,17 @@ class PfsBot(JabberBot):
             self._send_status()
             self.last_awake = time.time()
 
-
     def thread_proc(self):
         pass
 
     def sendAlert(self):
 
         for device in self.listTimeout:
-            if device not in self.timeoutAck:
+            if device not in self.timeoutAck and self.isRelevant(device):
                 self.sendAlarmMsg("TIME OUT ON %s ! ! !" % device)
         for device in self.criticalDevice:
             name = device["label"].lower()
-            if self.listAlarm[name] and self.messageAlarm[name]:
+            if self.listAlarm[name] and self.messageAlarm[name] and self.isRelevant(device["tablename"]):
                 self.sendAlarmMsg(self.messageAlarm[name][0])
 
     def checkCriticalValue(self):
@@ -358,9 +363,11 @@ class PfsBot(JabberBot):
                 label = config.get(a, 'label')
                 unit = config.get(a, 'unit')
                 labelDevice = config.get(a, 'label_device')
-                self.list_function.append((fname, tableName.lower(), key, label, unit, labelDevice))
+                if self.isRelevant(tableName):
+                    self.list_function.append((fname, tableName.lower(), key, label, unit, labelDevice))
 
     def loadAlarm(self, path):
+
         self.criticalDevice = []
         self.messageAlarm = {}
         config = ConfigParser.ConfigParser()
@@ -370,7 +377,6 @@ class PfsBot(JabberBot):
             for b in config.options(a):
                 dict[b] = config.get(a, b)
             self.criticalDevice.append(dict)
-
         for device in self.criticalDevice:
             try:
                 name = device["label"].lower()
@@ -423,3 +429,10 @@ class PfsBot(JabberBot):
         except IOError:
             self.log.debug("creating empty %s file" % filename)
             return {} if empty is None else []
+
+    def isRelevant(self, tableName):
+        actor = tableName.split('__')[0]
+        if actor in self.actorList:
+            return True
+        else:
+            return False
