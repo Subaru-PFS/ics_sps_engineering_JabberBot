@@ -262,6 +262,10 @@ class PfsBot(JabberBot):
         return "%s\n %s\n %s\n" % (str([jid for jid in self.userAlarm.iterkeys()]),
                                    str(self.listAlarm), str(self.timeoutAck))
 
+    @botcmd(hidden=True)
+    def kill(self):
+        self.__finished = True
+
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.get_ping() > self.PING_FREQUENCY:
             self._idle_ping()
