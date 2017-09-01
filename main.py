@@ -20,7 +20,8 @@ def runBot(args):
     port = args.port
 
     # create logger with 'spam_application'
-    actorList.append('xcu_%s' % cam)
+    actorList.extend([('xcu_%s' % cam),
+                      ('ccd_%s' % cam)])
     logger = logging.getLogger('JabberBot')
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
