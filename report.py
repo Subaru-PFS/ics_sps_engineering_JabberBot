@@ -20,15 +20,9 @@ from datetime import datetime as dt
 
 
 class Report(Thread):
-    color = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
-             (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
-             (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),
-             (227, 119, 194), (247, 182, 210), (127, 127, 127), (199, 199, 199),
-             (188, 189, 34), (224, 198, 17), (23, 190, 207), (158, 218, 229)]
-
-    for i, colors in enumerate(color):
-        r, g, b = colors
-        color[i] = (r / 255., g / 255., b / 255.)
+    colors = ['#1f78c5', '#ff801e', '#2ca13c', '#d82738', '#9568cf', '#8d565b', '#e578c3', '#17bfd1', '#f2f410',
+              '#808080', '#000000', '#acc5f5', '#fcb986', '#96dc98', '#fc96a4', '#c3aee2', '#c29aa2', '#f4b4cf',
+              '#9cd7e2', '#caca76', '#c5c5c5']
 
     def __init__(self, pfsbot, timedelta, user):
 
@@ -56,132 +50,95 @@ class Report(Thread):
         return
 
     def generate_pdf(self, db, str_date):
-        plot1 = []
-        plot2 = []
-        plot3 = []
-        plot4 = []
+
+        plot1, col1 = [], 0
+        plot2, col2 = [], 0
+        plot3, col3 = [], 0
+        plot4, col4 = [], 0
+
         fig1 = None
         fig2 = None
         fig3 = None
-        t0 = dt.now()
-        # try:
-        #     visthermGauge_date, visthermGauge_val = db.getDataBetween("vistherm__gauge", "secondary", str_date)
-        #     visthermGauge_val = self.checkValues(visthermGauge_val, ["pressure"] * 1)
-        #     plot1.append((visthermGauge_date, visthermGauge_val[:, 0], 'LAM_Gauge', Report.color[0]))
-        # except:
-        #     pass
-        try:
-            ionGauge_date, ionGauge_val = db.getDataBetween("xcu_r1__pressure", "val1", str_date)
-            ionGauge_val = self.checkValues(ionGauge_val, ['pressure'])
-            plot1.append((ionGauge_date, ionGauge_val[:, 0], 'Ion_Gauge', Report.color[2]))
-        except:
-            pass
-        try:
-            frontGauge_date, frontGauge_val = db.getDataBetween("xcu_r1__roughpressure1", "val1", str_date)
-            frontGauge_val = self.checkValues(frontGauge_val, ['pressure'])
-            plot1.append((frontGauge_date, frontGauge_val[:, 0], 'Roughing_Gauge', Report.color[4]))
-        except:
-            pass
-        try:
-            xcuIon3_date, xcuIon3_val = db.getDataBetween("xcu_r1__ionpump1", "pressure", str_date)
-            xcuIon4_date, xcuIon4_val = db.getDataBetween("xcu_r1__ionpump2", "pressure", str_date)
-            xcuIon3_val = self.checkValues(xcuIon3_val, ["pressure"] * 1)
-            xcuIon4_val = self.checkValues(xcuIon4_val, ["pressure"] * 1)
-            plot1.extend([(xcuIon3_date, xcuIon3_val[:, 0], 'Ionpump1', Report.color[10]),
-                          (xcuIon4_date, xcuIon4_val[:, 0], 'Ionpump2', Report.color[12])])
-        except:
-            pass
 
-        try:
-            cooler_date, cooler_val = db.getDataBetween("xcu_r1__coolertemps", "tip, power", str_date)
-            cooler_val = self.checkValues(cooler_val, ["temp_k", "power"])
-            plot2.append((cooler_date, cooler_val[:, 0], 'Cooler_Collar', Report.color[0]))
-            plot3.append((cooler_date, cooler_val[:, 1], 'Cooler_Power', Report.color[10]))
+        careless = ['Field Lens', 'Red Tube2'] + ['Pt%i' % i for i in range(12)]
 
-        except:
-            pass
-        try:
+        allc1 = [("xcu_%s__pressure" % self.pfsbot.cam, "val1"),
+                 ("xcu_%s__ionpump1" % self.pfsbot.cam, "pressure"),
+                 ("xcu_%s__ionpump2" % self.pfsbot.cam, "pressure"),
+                 ]
 
-            xcuTemps_date, xcuTemps_val = db.getDataBetween("xcu_r1__temps",
-                                                            "val1_0, val1_1, val1_3, val1_4, val1_10, val1_11",
-                                                            str_date)
-            xcuTemps_val = self.checkValues(xcuTemps_val, ["temp_k"] * 6)
-            plot2.extend([(xcuTemps_date, xcuTemps_val[:, 2], 'Spreader', Report.color[1]),
-                          (xcuTemps_date, xcuTemps_val[:, 0], 'Detector Box', Report.color[8]),
-                          (xcuTemps_date, xcuTemps_val[:, 5], 'Detector Strap_1', Report.color[6])])
+        allc2 = [("xcu_%s__coolertemps" % self.pfsbot.cam, "tip"),
+                 ("ccd_%s__ccdtemps" % self.pfsbot.cam, "ccd0"),
+                 ("ccd_%s__ccdtemps" % self.pfsbot.cam, "ccd1"),
+                 ("aitroom__weatherduino", "temp", "Room_Temp")]
 
-            plot4.extend([(xcuTemps_date, xcuTemps_val[:, 3], 'Front Ring', Report.color[13]),
-                          (xcuTemps_date, xcuTemps_val[:, 1], 'Mangin', Report.color[17])])
-        except:
-            pass
+        allc2.extend([("xcu_%s__temps" % self.pfsbot.cam, "val1_%i" % i) for i in range(12)])
+        allc2.extend([("vistherm__lamtemps1", "val1_%i" % i) for i in range(8)])
+        allc2.extend([("vistherm__lamtemps2", "val1_%i" % i) for i in range(9)])
+        allc2.extend([("aitenv__aitenv", "val1_%i" % i) for i in range(2)])
 
-        # try:
-        #     visthermTemps1_date, visthermTemps1_val = db.getDataBetween("vistherm__lamtemps1",
-        #                                                                 "val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7",
-        #                                                                 str_date)
-        #     visthermTemps1_val = self.checkValues(visthermTemps1_val, ["temp_k"] * 8)
-        #     plot2.extend([(visthermTemps1_date, visthermTemps1_val[:, 3], 'Cold_Strap_C_IN,', Report.color[4]),
-        #                   (visthermTemps1_date, visthermTemps1_val[:, 2], 'Cold_Strap_C_OUT', Report.color[5]),
-        #                   (visthermTemps1_date, visthermTemps1_val[:, 1], 'Field_Lens', Report.color[8]),
-        #                   (visthermTemps1_date, visthermTemps1_val[:, 6], 'AIT_Detector Box', Report.color[2]),
-        #                   (visthermTemps1_date, visthermTemps1_val[:, 4], 'Thermal_Bar_C_OUT', Report.color[7])])
-        #     plot4.append((visthermTemps1_date, visthermTemps1_val[:, 5], 'Spider/Rod Cover C OUT', Report.color[7]))
-        # except:
-        #     pass
-        # try:
-        #     visthermTemps2_date, visthermTemps2_val = db.getDataBetween("vistherm__lamtemps2",
-        #                                                                 "val1_0,val1_1,val1_2,val1_3,val1_4,val1_5,val1_6,val1_7,val1_8",
-        #                                                                 str_date)
-        #     visthermTemps2_val = self.checkValues(visthermTemps2_val, ["temp_k"] * 9)
-        #
-        #     plot2.extend([(visthermTemps2_date, visthermTemps2_val[:, 1], 'LAM_Tip', Report.color[18]),
-        #                   (visthermTemps2_date, visthermTemps2_val[:, 6], 'LAM_Spreader', Report.color[1]),
-        #                   (visthermTemps2_date, visthermTemps2_val[:, 8], 'Thermal_Bar_C_IN', Report.color[19])])
-        #     plot4.extend([(visthermTemps2_date, visthermTemps2_val[:, 7], 'Spider/Rod Cover C IN', Report.color[8]),
-        #                   (visthermTemps2_date, visthermTemps2_val[:, 2], 'Detect_Actuator', Report.color[11]),
-        #                   (visthermTemps2_date, visthermTemps2_val[:, 3], 'Red_Tube', Report.color[6]),
-        #                   (visthermTemps2_date, visthermTemps2_val[:, 4], 'Corrector_Cell', Report.color[0])])
-        # except:
-        #     pass
+        allc3 = [("xcu_%s__coolertemps" % self.pfsbot.cam, "power")]
 
-        try:
-            ccdTemps_date, ccdTemps_val = db.getDataBetween("ccd_r1__ccdtemps", "preamp, ccd0, ccd1", str_date)
-            ccdTemps_val = self.checkValues(ccdTemps_val, ["temp_k"] * 3)
-            plot2.extend([(ccdTemps_date, ccdTemps_val[:, 1], 'CCD Temps 0', Report.color[4]),
-                          (ccdTemps_date, ccdTemps_val[:, 2], 'CCD Temps 1', Report.color[5])])
-        except:
-            pass
+        for allc in [allc1, allc2, allc3]:
+            for i, elem in enumerate(allc):
+                vkeys = ','.join(
+                    [k for k in elem[1].split(',') if '%s-%s' % (elem[0], k) in self.pfsbot.curveDict.iterkeys()])
 
-        # try:
-        #     aitenv_date, aitenv_val = db.getDataBetween("aitenv__aitenv", "val1_0, val1_1", str_date)
-        #     aitenv_val = self.checkValues(aitenv_val, ["temp_c"] * 2)
-        #     plot4.extend([(aitenv_date, aitenv_val[:, 0] + 273.15, 'LAM_Env_Rear', Report.color[0]),
-        #                   (aitenv_date, aitenv_val[:, 1] + 273.15, 'LAM_Env_Front', Report.color[1])])
-        #
-        # except:
-        #     pass
+                allc[i] = (elem[0], vkeys, None) if len(elem) == 2 else (elem[0], vkeys, elem[1])
 
-        try:
-            weather_date, weather_val = db.getDataBetween("aitroom__weatherduino", "temp", str_date)
-            weather_val = self.checkValues(weather_val, ["temp_c"] * 1)
-            plot4.append((weather_date, weather_val[:, 0] + 273.15, 'CleanRoom_Temp', Report.color[15]))
-        except:
-            pass
+        allc1 = [curve for curve in allc1 if curve[1]]
+        allc2 = [curve for curve in allc2 if curve[1]]
+        allc3 = [curve for curve in allc3 if curve[1]]
 
-        try:
-            weather_date2, weather_val2 = db.getDataBetween("aitroom__weatherduino2", "temp", str_date)
-            weather_val2 = self.checkValues(weather_val2, ["temp_c"] * 1)
-            plot4.append((weather_date2, weather_val2[:, 0] + 273.15, 'CleanRoom_Temp2', Report.color[4]))
+        for table, keys, hardLabel in allc1:
+            tstamp, vals = db.getDataBetween(table, keys, str_date)
 
-        except:
-            pass
+            try:
+                for i, key in enumerate(keys.split(',')):
+                    device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
+                    label = hardLabel if hardLabel is not None else label
+                    vals = self.checkValues(vals[:, i], typ)
+                    plot1.append((tstamp, vals, '%s' % device, Report.colors[col1]))
+                    col1 += 1
 
-        try:
-            flow_date, flow_val = db.getDataBetween("aitroom__flowduino", "temp", str_date)
-            flow_val = self.checkValues(flow_val, ["temp_c"] * 1)
-            plot4.append((flow_date, flow_val[:, 0] + 273.15, 'Flow_temp', Report.color[11]))
-        except:
-            pass
+            except Exception as e:
+                print e
+
+        for table, keys, hardLabel in allc2:
+            tstamp, vals = db.getDataBetween(table, keys, str_date)
+
+            try:
+                for i, key in enumerate(keys.split(',')):
+                    device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
+                    label = hardLabel if hardLabel is not None else label
+                    vals = self.checkValues(vals[:, i], typ)
+                    if label not in careless:
+                        offset = 273.15 if typ == 'temperature_c' else 0
+                        vals += offset
+                        if np.mean(vals) < 270:
+                            label = self.checkLabel(plot2, label)
+                            plot2.append((tstamp, vals, '%s' % label, Report.colors[col2]))
+                            col2 += 1
+                        else:
+                            label = self.checkLabel(plot4, label)
+                            plot4.append((tstamp, vals, '%s' % label, Report.colors[col4]))
+                            col4 += 1
+
+            except Exception as e:
+                print e
+
+        for table, keys, hardLabel in allc3:
+            tstamp, vals = db.getDataBetween(table, keys, str_date)
+
+            try:
+                for i, key in enumerate(keys.split(',')):
+                    device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
+                    label = hardLabel if hardLabel is not None else label
+                    vals = self.checkValues(vals[:, i], typ)
+                    plot3.append((tstamp, vals, '%s' % device, Report.colors[col2]))
+
+            except Exception as e:
+                print e
 
         if plot1:
             fig1 = plt.figure()
@@ -195,13 +152,13 @@ class Report(Thread):
             ax1.yaxis.set_minor_locator(ticker.LogLocator(subs=subs))  # set the ticks position
             minor_locatorx = ticker.AutoMinorLocator(5)
             ax1.xaxis.set_minor_locator(minor_locatorx)
-            ax1.set_ylabel("Pressure (Torr)", color=Report.color[0])
+            ax1.set_ylabel("Pressure (Torr)", color=Report.colors[0])
             for tick in ax1.yaxis.get_major_ticks():
                 tick.label1On = True
                 tick.label2On = False
-                tick.label1.set_color(Report.color[0])
-                ax1.grid(which='major', alpha=0.5, color=Report.color[0])
-                ax1.grid(which='minor', alpha=0.25, color=Report.color[0])
+                tick.label1.set_color(Report.colors[0])
+                ax1.grid(which='major', alpha=0.5, color=Report.colors[0])
+                ax1.grid(which='minor', alpha=0.25, color=Report.colors[0])
             box = ax1.get_position()
             ax1.set_position([box.x0, 0.18, box.width, box.height * 0.8])
             lns, labs = self.sortCurve([ax1])
@@ -221,24 +178,24 @@ class Report(Thread):
                 for date, values, label, col in plot3:
                     ax3.plot_date(date, values, '-', label=label, color=col)
 
-            ax2.set_ylabel("Temperature (K)", color=Report.color[18])
+            ax2.set_ylabel("Temperature (K)", color=Report.colors[0])
             for tick in ax2.yaxis.get_major_ticks():
                 tick.label1On = True
                 tick.label2On = False
-                tick.label1.set_color(color=Report.color[18])
+                tick.label1.set_color(color=Report.colors[0])
                 ax3.grid(which='major', alpha=0.0)
-                ax2.grid(which='major', alpha=0.5, color=Report.color[18])
-                ax2.grid(which='minor', alpha=0.25, color=Report.color[18], linestyle='--')
+                ax2.grid(which='major', alpha=0.5, color=Report.colors[0])
+                ax2.grid(which='minor', alpha=0.25, color=Report.colors[0], linestyle='--')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax2.yaxis.set_minor_locator(minor_locatory)
             ax2.get_yaxis().get_major_formatter().set_useOffset(False)
 
-            ax3.set_ylabel("Power (W)", color=Report.color[10])
+            ax3.set_ylabel("Power (W)", color=col)
             for tick in ax3.yaxis.get_major_ticks():
                 tick.label1On = False
                 tick.label2On = True
-                tick.label2.set_color(color=Report.color[10])
-                ax3.grid(which='major', alpha=1.0, color=Report.color[10], linestyle='dashdot')
+                tick.label2.set_color(color=col)
+                ax3.grid(which='major', alpha=1.0, color=col, linestyle='dashdot')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax3.yaxis.set_minor_locator(minor_locatory)
             ax3.get_yaxis().get_major_formatter().set_useOffset(False)
@@ -262,23 +219,23 @@ class Report(Thread):
             for date, values, label, col in plot4:
                 ax4.plot_date(date, values, '-', label=label, color=col)
 
-            ax4.set_ylabel("Temperature (K)", color=Report.color[2])
+            ax4.set_ylabel("Temperature (K)", color=Report.colors[0])
             for tick in ax4.yaxis.get_major_ticks():
                 tick.label1On = True
                 tick.label2On = False
-                tick.label1.set_color(color=Report.color[2])
-                ax4.grid(which='major', alpha=0.5, color=Report.color[2])
-                ax4.grid(which='minor', alpha=0.25, color=Report.color[2], linestyle='--')
+                tick.label1.set_color(color=Report.colors[0])
+                ax4.grid(which='major', alpha=0.5, color=Report.colors[0])
+                ax4.grid(which='minor', alpha=0.25, color=Report.colors[0], linestyle='--')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax4.yaxis.set_minor_locator(minor_locatory)
             ax4.get_yaxis().get_major_formatter().set_useOffset(False)
 
-            ax5.set_ylabel("Temperature (C)", color=Report.color[10])
+            ax5.set_ylabel("Temperature (C)", color=Report.colors[10])
             for tick in ax5.yaxis.get_major_ticks():
                 tick.label1On = False
                 tick.label2On = True
-                tick.label2.set_color(color=Report.color[10])
-                ax5.grid(which='major', alpha=1.0, color=Report.color[10], linestyle='dashdot')
+                tick.label2.set_color(color=Report.colors[10])
+                ax5.grid(which='major', alpha=1.0, color=Report.colors[10], linestyle='dashdot')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax5.yaxis.set_minor_locator(minor_locatory)
             ax5.get_yaxis().get_major_formatter().set_useOffset(False)
@@ -288,14 +245,15 @@ class Report(Thread):
             ax5.set_position([box.x0, 0.18, box.width, box.height * 0.8])
 
             lns, labs = self.sortCurve([ax4])
-            ax4.legend(lns, labs, bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=3, mode="expand", borderaxespad=0.,
-                       prop={'size': 9})
+            ax4.legend(lns, labs, bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=4, mode="expand", borderaxespad=0.,
+                       prop={'size': 8})
             ax5.set_ylim((ax4.get_ylim()[0] - 273.15, ax4.get_ylim()[1] - 273.15))
 
             ax4.xaxis.set_major_formatter(DateFormatter(self.getDateFormat(ax4.get_xlim())))
             plt.setp(ax4.xaxis.get_majorticklabels(), rotation=75, horizontalalignment='right')
 
-        file_name = '/home/pfs/AIT-PFS/jabberLog/PFS_AIT_Report_%s.pdf' % dt.now().strftime("%Y-%m-%d_%H-%M")
+        file_name = '/home/pfs/AIT-PFS/jabberLog/PFS_AIT_Report-%s_%s.pdf' % (self.pfsbot.cam.upper(),
+                                                                              dt.now().strftime("%Y-%m-%d_%H-%M"))
 
         if fig1 is not None or fig2 is not None or fig3 is not None:
             with PdfPages(file_name) as pdf:
@@ -325,17 +283,16 @@ class Report(Thread):
             format_date = "%H:%M:%S"
         return format_date
 
-    def checkValues(self, value, type):
-        allMin = {'temp_k': 15, "pressure": 1e-9, "power": 0, "temp_c": -20}
-        allMax = {'temp_k': 330, "pressure": 1e4, "power": 250, "temp_c": 50}
-        minVal = [allMin[t] for t in type]
-        maxVal = [allMax[t] for t in type]
-        for i in range(value.shape[1]):
-            for j in range(value.shape[0]):
-                if not minVal[i] <= value[j][i] < maxVal[i]:
-                    value[j][i] = np.nan
+    def checkValues(self, values, type):
+        allMin = {'temperature_k': 15, "pressure_torr": 1e-9, "power": 0, "temperature_c": -20}
+        allMax = {'temperature_k': 349, "pressure_torr": 1e4, "power": 250, "temperature_c": 60}
+        minVal = allMin[type]
+        maxVal = allMax[type]
 
-        return value
+        ind = np.logical_and(values >= minVal, values <= maxVal)
+        values[~ind] = np.nan
+
+        return values
 
     def sortCurve(self, list_axes):
         vmax = []
@@ -351,6 +308,14 @@ class Report(Thread):
             labs.append(labels)
 
         return lns, labs
+
+    def checkLabel(self, plot, label):
+        found = False
+        labels = [lab for (tstamp, vals, lab, color) in plot]
+        if label in labels:
+            label = "AIT_%s" % label
+
+        return label
 
     def send_pdf(self, send_to, myfile):
 
