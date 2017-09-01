@@ -713,7 +713,7 @@ class JabberBot(object):
         Override this method in derived class if you
         want to do anything special at shutdown.
         """
-        pass
+        self.__finished = True
 
     def serve_forever(self, connect_callback=None, disconnect_callback=None):
         """Connects to the server and handles messages."""
