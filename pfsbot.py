@@ -43,6 +43,7 @@ class PfsBot(JabberBot):
         self.db_port = port
         self.actorList = actorList
         self.list_function = []
+        self.curveDict = {}
         self.thread_killed = False
         self.path = absPath
         self.last_alert = time.time()
@@ -263,8 +264,8 @@ class PfsBot(JabberBot):
                                    str(self.listAlarm), str(self.timeoutAck))
 
     @botcmd(hidden=True)
-    def kill(self):
-        self.__finished = True
+    def kill(self, mess, args):
+        self.shutdown()
 
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.get_ping() > self.PING_FREQUENCY:
@@ -369,6 +370,10 @@ class PfsBot(JabberBot):
                 labelDevice = config.get(a, 'label_device')
                 if self.isRelevant(tableName):
                     self.list_function.append((fname, tableName.lower(), key, label, unit, labelDevice))
+                    for k, l, t in zip([k.strip() for k in key.split(',')],
+                                       [l.strip() for l in label.split(',')],
+                                       [t.strip() for t in config.get(a, 'type').split(',')]):
+                        self.curveDict["%s-%s" % (tableName, k)] = labelDevice, t, l
 
     def loadAlarm(self, path):
 
