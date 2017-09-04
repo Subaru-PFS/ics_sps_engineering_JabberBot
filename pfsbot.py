@@ -29,7 +29,7 @@ from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
 from myjabberbot import JabberBot, botcmd
 from report import Report
-from expdata import Expdata
+from dataset import Dataset
 
 
 class PfsBot(JabberBot):
@@ -37,9 +37,10 @@ class PfsBot(JabberBot):
     TIMEOUT_LIM = 90
     ALERT_FREQ = 60
 
-    def __init__(self, jid, password, absPath, addr, port, actorList):
+    def __init__(self, jid, password, absPath, logFolder, addr, port, actorList):
         self.log = logging.getLogger('JabberBot.PfsBot')
 
+        self.logFolder = logFolder
         self.db_addr = addr
         self.db_port = port
         self.actorList = actorList
@@ -50,10 +51,7 @@ class PfsBot(JabberBot):
         self.last_alert = time.time()
         self.last_awake = time.time()
 
-        self.userAlarm = self.unPickle("userAlarm")
-        self.listAlarm = self.unPickle("listAlarm")
-        self.timeoutAck = self.unPickle("timeoutAck", empty="list")
-        self.knownUsers = self.unPickle("knownUsers")
+        self.loadStatus()
 
         self.db = DatabaseManager(addr, port)
         self.db.initDatabase()
@@ -73,9 +71,18 @@ class PfsBot(JabberBot):
     def cam(self):
         return self.actorList[-1].split('__')[-1].split('_')[-1]
 
+    def loadStatus(self):
+        self.userAlarm = self.unPickle("userAlarm")
+        self.listAlarm = self.unPickle("listAlarm")
+        self.timeoutAck = self.unPickle("timeoutAck", empty="list")
+        self.knownUsers = self.unPickle("knownUsers")
+
+
     @botcmd
     def alarm_mode(self, mess, args):
         """Be noticed by the alarms args : on/off"""
+        self.loadStatus()
+
         args = str(args)
         if args in ['on', 'off']:
             user = mess.getFrom().getNode()
@@ -110,6 +117,8 @@ class PfsBot(JabberBot):
     @botcmd
     def alarm(self, mess, args):
         """alarm pressure|turbo|gatevalve|cooler  ack|off|on """
+        self.loadStatus()
+
         args = str(args)
         kind = {'on': 'activated', 'off': 'desactivated', 'ack': 'acknowledge'}
 
@@ -157,6 +166,7 @@ class PfsBot(JabberBot):
     @botcmd
     def timeout(self, mess, args):
         """timeout device ack|rearm """
+        self.loadStatus()
 
         args = str(args)
         if len(args.split(' ')) == 2:
@@ -204,7 +214,7 @@ class PfsBot(JabberBot):
         """Get all parameters """
         user = mess.getFrom()
         res = ""
-        for attr in ['pressure', 'frontpressure', 'lam_pressure',
+        for attr in ['pressure', 'frontpressure', 'lam_pressure','ionpump1','ionpump2',
                      'cooler', 'temperature', 'ccd_temps', 'lam_temps1', 'lam_temps2']:
 
             try:
@@ -252,10 +262,10 @@ class PfsBot(JabberBot):
 
 
     @botcmd
-    def data(self, mess, args):
-        """send a csv datafile to your email address
+    def dataset(self, mess, args):
+        """send a csv dataset to your email address
            argument : date1(Y-m-d) date2(Y-m-d) sampling period (seconds)
-           ex : data 2017-09-01 2017-09-02 600
+           ex : dataset 2017-09-01 2017-09-02 600
                 """
         if len(args.split(' ')) == 3:
             dstart = args.split(' ')[0].strip().lower()
@@ -268,15 +278,16 @@ class PfsBot(JabberBot):
         if user in self.knownUsers:
             dstart = dt.strptime(dstart, "%Y-%m-%d")
             dend = dt.strptime(dend, "%Y-%m-%d")
-            exportData = Expdata(self, mess.getFrom(), dstart, dend, step)
-            exportData.start()
-            return "Generating the data ..."
+            dataset = Dataset(self, mess.getFrom(), dstart, dend, step)
+            dataset.start()
+            return "Generating the dataset ..."
 
         else:
             return "Do I know you ? Send me your email address by using the command record "
 
     @botcmd
     def record(self, mess, args):
+        self.loadStatus()
         user = mess.getFrom().getNode()
         self.knownUsers[user] = args.strip()
         with open(self.path + 'knowUsers', 'w') as thisFile:
@@ -287,6 +298,8 @@ class PfsBot(JabberBot):
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
+        self.loadStatus()
+
         return "%s\n %s\n %s\n" % (str([jid for jid in self.userAlarm.iterkeys()]),
                                    str(self.listAlarm), str(self.timeoutAck))
 
@@ -301,6 +314,7 @@ class PfsBot(JabberBot):
             self.checkCriticalValue()
 
         if self.PING_FREQUENCY and time.time() - self.last_alert > self.ALERT_FREQ:
+            self.loadStatus()
             self.sendAlert()
             self.last_alert = time.time()
 
@@ -421,6 +435,10 @@ class PfsBot(JabberBot):
                 self.listAlarm[name] = False
 
             self.messageAlarm[name] = []
+
+        with open(self.path + 'listAlarm', 'w') as thisFile:
+            pickler = pickle.Pickler(thisFile)
+            pickler.dump(self.listAlarm)
 
     def loadTimeout(self):
         self.listTimeout = []
