@@ -2,28 +2,17 @@ import matplotlib as mpl
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
-import numpy as np
+
 from matplotlib import ticker
 from matplotlib.dates import DateFormatter
 from matplotlib.backends.backend_pdf import PdfPages
 
-import smtplib
-from os.path import basename
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import COMMASPACE, formatdate
 from threading import Thread
-from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
-
+from exportdata import exportData, send_file
 from datetime import datetime as dt
 
 
 class Report(Thread):
-    colors = ['#1f78c5', '#ff801e', '#2ca13c', '#d82738', '#9568cf', '#8d565b', '#e578c3', '#17bfd1', '#f2f410',
-              '#808080', '#000000', '#acc5f5', '#fcb986', '#96dc98', '#fc96a4', '#c3aee2', '#c29aa2', '#f4b4cf',
-              '#9cd7e2', '#caca76', '#c5c5c5']
-
     def __init__(self, pfsbot, timedelta, user):
 
         Thread.__init__(self)
@@ -35,131 +24,45 @@ class Report(Thread):
         self.pfsbot = pfsbot
         self.user = user
 
-        self.db = DatabaseManager(pfsbot.db_addr, pfsbot.db_port)
-        self.db.initDatabase()
-
     def run(self):
-        file_name = self.generate_pdf(self.db, self.str_date)
+        file_name = self.generate_pdf()
         if file_name:
             address = self.pfsbot.knownUsers[self.user.getNode()]
-            self.send_pdf(address, file_name)
+            send_file(address, file_name, '[PFS] AIT Report')
             self.pfsbot.send(self.user, "I've just sent the report to %s" % address)
         else:
             self.pfsbot.send(self.user, "an error has occured")
-        self.db.closeDatabase()
         return
 
-    def generate_pdf(self, db, str_date):
-
-        plot1, col1 = [], 0
-        plot2, col2 = [], 0
-        plot3, col3 = [], 0
-        plot4, col4 = [], 0
-
+    def generate_pdf(self):
         fig1 = None
         fig2 = None
         fig3 = None
 
-        careless = ['Field Lens', 'Red Tube2'] + ['Pt%i' % i for i in range(12)]
-
-        allc1 = [("xcu_%s__pressure" % self.pfsbot.cam, "val1"),
-                 ("xcu_%s__ionpump1" % self.pfsbot.cam, "pressure"),
-                 ("xcu_%s__ionpump2" % self.pfsbot.cam, "pressure"),
-                 ]
-
-        allc2 = [("xcu_%s__coolertemps" % self.pfsbot.cam, "tip"),
-                 ("ccd_%s__ccdtemps" % self.pfsbot.cam, "ccd0"),
-                 ("ccd_%s__ccdtemps" % self.pfsbot.cam, "ccd1"),
-                 ("aitroom__weatherduino", "temp", "Room_Temp")]
-
-        allc2.extend([("xcu_%s__temps" % self.pfsbot.cam, "val1_%i" % i) for i in range(12)])
-        allc2.extend([("vistherm__lamtemps1", "val1_%i" % i) for i in range(8)])
-        allc2.extend([("vistherm__lamtemps2", "val1_%i" % i) for i in range(9)])
-        allc2.extend([("aitenv__aitenv", "val1_%i" % i) for i in range(2)])
-
-        allc3 = [("xcu_%s__coolertemps" % self.pfsbot.cam, "power", "Cooler_Power")]
-
-        for allc in [allc1, allc2, allc3]:
-            for i, elem in enumerate(allc):
-                vkeys = ','.join(
-                    [k for k in elem[1].split(',') if '%s-%s' % (elem[0], k) in self.pfsbot.curveDict.iterkeys()])
-
-                allc[i] = (elem[0], vkeys, ',' * len(elem[1].split(','))) if len(elem) == 2 else (
-                    elem[0], vkeys, elem[2])
-
-        allc1 = [curve for curve in allc1 if curve[1]]
-        allc2 = [curve for curve in allc2 if curve[1]]
-        allc3 = [curve for curve in allc3 if curve[1]]
-
-        for table, keys, hardLabels in allc1:
-            tstamp, vals = db.getDataBetween(table, keys, str_date)
-
-            try:
-                for i, (key, hardLabel) in enumerate(zip(keys.split(','), hardLabels.split(','))):
-                    device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
-                    label = hardLabel if hardLabel else label
-                    vals = self.checkValues(vals[:, i], typ)
-                    plot1.append((tstamp, vals, '%s' % device, Report.colors[col1]))
-                    col1 += 1
-
-            except Exception as e:
-                print e
-
-        for table, keys, hardLabels in allc2:
-            tstamp, vals = db.getDataBetween(table, keys, str_date)
-
-            try:
-                for i, (key, hardLabel) in enumerate(zip(keys.split(','), hardLabels.split(','))):
-                    device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
-                    label = hardLabel if hardLabel else label
-                    vals = self.checkValues(vals[:, i], typ)
-                    if label not in careless:
-                        offset = 273.15 if typ == 'temperature_c' else 0
-                        vals += offset
-                        if np.mean(vals) < 270:
-                            label = self.checkLabel(plot2, label)
-                            plot2.append((tstamp, vals, '%s' % label, Report.colors[col2]))
-                            col2 += 1
-                        else:
-                            label = self.checkLabel(plot4, label)
-                            plot4.append((tstamp, vals, '%s' % label, Report.colors[col4]))
-                            col4 += 1
-
-            except Exception as e:
-                print e
-
-        for table, keys, hardLabels in allc3:
-            tstamp, vals = db.getDataBetween(table, keys, str_date)
-
-            try:
-                for i, (key, hardLabel) in enumerate(zip(keys.split(','), hardLabels.split(','))):
-                    device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
-                    label = hardLabel if hardLabel else label
-                    vals = self.checkValues(vals[:, i], typ)
-                    plot3.append((tstamp, vals, '%s' % label, Report.colors[col2]))
-
-            except Exception as e:
-                print e
-
+        plot1, plot2, plot3, plot4 = exportData(pfsbot=self.pfsbot, dates=[self.str_date], rm=["Field Lens",
+                                                                                               'Red Tube2'])
         if plot1:
             fig1 = plt.figure()
             ax1 = fig1.add_subplot(111)
 
-            for date, values, label, col in plot1:
+            for data in plot1:
+                date, values, label, col = data.props
                 ax1.plot_date(date, values, '-', label=label, color=col)
+
+            axecol = plot1[0].col
 
             ax1.set_yscale('log', basey=10)
             subs = [1.0, 2.0, 3.0, 5.0]  # ticks to show per decade
             ax1.yaxis.set_minor_locator(ticker.LogLocator(subs=subs))  # set the ticks position
             minor_locatorx = ticker.AutoMinorLocator(5)
             ax1.xaxis.set_minor_locator(minor_locatorx)
-            ax1.set_ylabel("Pressure (Torr)", color=Report.colors[0])
+            ax1.set_ylabel("Pressure (Torr)", color=axecol)
             for tick in ax1.yaxis.get_major_ticks():
                 tick.label1On = True
                 tick.label2On = False
-                tick.label1.set_color(Report.colors[0])
-                ax1.grid(which='major', alpha=0.5, color=Report.colors[0])
-                ax1.grid(which='minor', alpha=0.25, color=Report.colors[0])
+                tick.label1.set_color(axecol)
+                ax1.grid(which='major', alpha=0.5, color=axecol)
+                ax1.grid(which='minor', alpha=0.25, color=axecol)
             box = ax1.get_position()
             ax1.set_position([box.x0, 0.18, box.width, box.height * 0.8])
             lns, labs = self.sortCurve([ax1])
@@ -173,25 +76,30 @@ class Report(Thread):
             ax2 = fig2.add_subplot(111)
             ax3 = ax2.twinx()
 
-            for date, values, label, col in plot2:
+            for data in plot2:
+                date, values, label, col = data.props
                 ax2.plot_date(date, values, '-', label=label, color=col)
+
+            axe2col = plot2[0].col
+            axe3col = plot3[0].col if plot3 else axe2col
             if plot3:
-                for date, values, label, col in plot3:
+                for data in plot3:
+                    date, values, label, col = data.props
                     ax3.plot_date(date, values, '-', label=label, color=col)
 
-            ax2.set_ylabel("Temperature (K)", color=Report.colors[0])
+            ax2.set_ylabel("Temperature (K)", color=axe2col)
             for tick in ax2.yaxis.get_major_ticks():
                 tick.label1On = True
                 tick.label2On = False
-                tick.label1.set_color(color=Report.colors[0])
+                tick.label1.set_color(color=axe2col)
                 ax3.grid(which='major', alpha=0.0)
-                ax2.grid(which='major', alpha=0.5, color=Report.colors[0])
-                ax2.grid(which='minor', alpha=0.25, color=Report.colors[0], linestyle='--')
+                ax2.grid(which='major', alpha=0.5, color=axe2col)
+                ax2.grid(which='minor', alpha=0.25, color=axe2col, linestyle='--')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax2.yaxis.set_minor_locator(minor_locatory)
             ax2.get_yaxis().get_major_formatter().set_useOffset(False)
 
-            ax3.set_ylabel("Power (W)", color=col)
+            ax3.set_ylabel("Power (W)", color=axe3col)
             for tick in ax3.yaxis.get_major_ticks():
                 tick.label1On = False
                 tick.label2On = True
@@ -217,26 +125,30 @@ class Report(Thread):
             ax4 = fig3.add_subplot(111)
             ax5 = ax4.twinx()
 
-            for date, values, label, col in plot4:
+            for data in plot4:
+                date, values, label, col = data.props
                 ax4.plot_date(date, values, '-', label=label, color=col)
 
-            ax4.set_ylabel("Temperature (K)", color=Report.colors[0])
+            axe4col = plot4[0].col
+            axe5col = plot3[0].col
+
+            ax4.set_ylabel("Temperature (K)", color=axe4col)
             for tick in ax4.yaxis.get_major_ticks():
                 tick.label1On = True
                 tick.label2On = False
-                tick.label1.set_color(color=Report.colors[0])
-                ax4.grid(which='major', alpha=0.5, color=Report.colors[0])
-                ax4.grid(which='minor', alpha=0.25, color=Report.colors[0], linestyle='--')
+                tick.label1.set_color(color=axe4col)
+                ax4.grid(which='major', alpha=0.5, color=axe4col)
+                ax4.grid(which='minor', alpha=0.25, color=axe4col, linestyle='--')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax4.yaxis.set_minor_locator(minor_locatory)
             ax4.get_yaxis().get_major_formatter().set_useOffset(False)
 
-            ax5.set_ylabel("Temperature (C)", color=Report.colors[10])
+            ax5.set_ylabel("Temperature (C)", color=axe5col)
             for tick in ax5.yaxis.get_major_ticks():
                 tick.label1On = False
                 tick.label2On = True
-                tick.label2.set_color(color=Report.colors[10])
-                ax5.grid(which='major', alpha=1.0, color=Report.colors[10], linestyle='dashdot')
+                tick.label2.set_color(color=axe5col)
+                ax5.grid(which='major', alpha=1.0, color=axe5col, linestyle='dashdot')
             minor_locatory = ticker.AutoMinorLocator(5)
             ax5.yaxis.set_minor_locator(minor_locatory)
             ax5.get_yaxis().get_major_formatter().set_useOffset(False)
@@ -253,8 +165,9 @@ class Report(Thread):
             ax4.xaxis.set_major_formatter(DateFormatter(self.getDateFormat(ax4.get_xlim())))
             plt.setp(ax4.xaxis.get_majorticklabels(), rotation=75, horizontalalignment='right')
 
-        file_name = '/home/pfs/AIT-PFS/jabberLog/PFS_AIT_Report-%s_%s.pdf' % (self.pfsbot.cam.upper(),
-                                                                              dt.now().strftime("%Y-%m-%d_%H-%M"))
+        file_name = '%s/PFS_AIT_Report-%s_%s.pdf' % (self.pfsbot.logFolder,
+                                                     self.pfsbot.cam.upper(),
+                                                     dt.now().strftime("%Y-%m-%d_%H-%M"))
 
         if fig1 is not None or fig2 is not None or fig3 is not None:
             with PdfPages(file_name) as pdf:
@@ -284,17 +197,6 @@ class Report(Thread):
             format_date = "%H:%M:%S"
         return format_date
 
-    def checkValues(self, values, type):
-        allMin = {'temperature_k': 15, "pressure_torr": 1e-9, "power": 0, "temperature_c": -20}
-        allMax = {'temperature_k': 349, "pressure_torr": 1e4, "power": 250, "temperature_c": 60}
-        minVal = allMin[type]
-        maxVal = allMax[type]
-
-        ind = np.logical_and(values >= minVal, values <= maxVal)
-        values[~ind] = np.nan
-
-        return values
-
     def sortCurve(self, list_axes):
         vmax = []
         lns = []
@@ -309,42 +211,3 @@ class Report(Thread):
             labs.append(labels)
 
         return lns, labs
-
-    def checkLabel(self, plot, label):
-        found = False
-        labels = [lab for (tstamp, vals, lab, color) in plot]
-        if label in labels:
-            label = "AIT_%s" % label
-
-        return label
-
-    def send_pdf(self, send_to, myfile):
-
-        send_from = 'arnaud.lefur@lam.fr'
-        subject = '[PFS] AIT Report'
-        text = 'This email has been generated for PFS AIT'
-        server = "smtp.osupytheas.fr"
-        port = 587
-        user = "alefur"
-        password = "cia2757cfc"
-        msg = MIMEMultipart()
-        msg['From'] = send_from
-        msg['To'] = COMMASPACE.join([send_to])
-        msg['Date'] = formatdate(localtime=True)
-        msg['Subject'] = subject
-
-        msg.attach(MIMEText(text))
-
-        with open(myfile, "rb") as fil:
-            part = MIMEApplication(
-                fil.read(),
-                Name=basename(myfile)
-            )
-            part['Content-Disposition'] = 'attachment; filename="%s"' % basename(myfile)
-            msg.attach(part)
-
-        smtp = smtplib.SMTP(server, port)
-        smtp.starttls()
-        smtp.login(user, password)
-        smtp.sendmail(send_from, [send_to], msg.as_string())
-        smtp.close()
