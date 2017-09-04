@@ -18,6 +18,7 @@ def runBot(args):
     actorList = args.ait.split(',')
     addr = args.host
     port = args.port
+    logFolder = args.logFolder
 
     # create logger with 'spam_application'
     actorList.extend([('xcu_%s' % cam),
@@ -25,7 +26,7 @@ def runBot(args):
     logger = logging.getLogger('JabberBot')
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
-    fh = logging.FileHandler('/home/pfs/AIT-PFS/jabberLog/%s-%s.log' % (dt.now().strftime("%Y-%m-%d_%H-%M"), cam))
+    fh = logging.FileHandler('%s/%s-%s.log' % (logFolder, dt.now().strftime("%Y-%m-%d_%H-%M"), cam))
 
     fh.setLevel(logging.DEBUG)
     # create console handler with a higher log level
@@ -47,7 +48,7 @@ def runBot(args):
             time.sleep(2)
             if pingXmpp("xmpp.osupytheas.fr"):
                 logger.debug("Creating an instance of PfsBot")
-                bc = PfsBot(JID, PASSWORD, absPath, addr, port, actorList)
+                bc = PfsBot(JID, PASSWORD, absPath, logFolder, addr, port, actorList)
                 th = threading.Thread(target=bc.thread_proc)
                 bc.serve_forever(connect_callback=lambda: th.start())
                 bc.thread_killed = True
@@ -66,6 +67,7 @@ def main():
     parser.add_argument('--ait', default=None, type=str, nargs='?', help='ait actors list')
     parser.add_argument('--host', default='localhost', type=str, nargs='?', help='database server ip address')
     parser.add_argument('--port', default='5432', type=int, nargs='?', help='database server port')
+    parser.add_argument('--logFolder', default='/home/pfs/AIT-PFS/jabberLog', type=str, nargs='?', help='log')
 
     args = parser.parse_args()
 
