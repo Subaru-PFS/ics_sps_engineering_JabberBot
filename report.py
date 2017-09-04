@@ -77,26 +77,27 @@ class Report(Thread):
         allc2.extend([("vistherm__lamtemps2", "val1_%i" % i) for i in range(9)])
         allc2.extend([("aitenv__aitenv", "val1_%i" % i) for i in range(2)])
 
-        allc3 = [("xcu_%s__coolertemps" % self.pfsbot.cam, "power")]
+        allc3 = [("xcu_%s__coolertemps" % self.pfsbot.cam, "power", "Cooler_Power")]
 
         for allc in [allc1, allc2, allc3]:
             for i, elem in enumerate(allc):
                 vkeys = ','.join(
                     [k for k in elem[1].split(',') if '%s-%s' % (elem[0], k) in self.pfsbot.curveDict.iterkeys()])
 
-                allc[i] = (elem[0], vkeys, None) if len(elem) == 2 else (elem[0], vkeys, elem[1])
+                allc[i] = (elem[0], vkeys, ',' * len(elem[1].split(','))) if len(elem) == 2 else (
+                    elem[0], vkeys, elem[2])
 
         allc1 = [curve for curve in allc1 if curve[1]]
         allc2 = [curve for curve in allc2 if curve[1]]
         allc3 = [curve for curve in allc3 if curve[1]]
 
-        for table, keys, hardLabel in allc1:
+        for table, keys, hardLabels in allc1:
             tstamp, vals = db.getDataBetween(table, keys, str_date)
 
             try:
-                for i, key in enumerate(keys.split(',')):
+                for i, (key, hardLabel) in enumerate(zip(keys.split(','), hardLabels.split(','))):
                     device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
-                    label = hardLabel if hardLabel is not None else label
+                    label = hardLabel if hardLabel else label
                     vals = self.checkValues(vals[:, i], typ)
                     plot1.append((tstamp, vals, '%s' % device, Report.colors[col1]))
                     col1 += 1
@@ -104,13 +105,13 @@ class Report(Thread):
             except Exception as e:
                 print e
 
-        for table, keys, hardLabel in allc2:
+        for table, keys, hardLabels in allc2:
             tstamp, vals = db.getDataBetween(table, keys, str_date)
 
             try:
-                for i, key in enumerate(keys.split(',')):
+                for i, (key, hardLabel) in enumerate(zip(keys.split(','), hardLabels.split(','))):
                     device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
-                    label = hardLabel if hardLabel is not None else label
+                    label = hardLabel if hardLabel else label
                     vals = self.checkValues(vals[:, i], typ)
                     if label not in careless:
                         offset = 273.15 if typ == 'temperature_c' else 0
@@ -127,15 +128,15 @@ class Report(Thread):
             except Exception as e:
                 print e
 
-        for table, keys, hardLabel in allc3:
+        for table, keys, hardLabels in allc3:
             tstamp, vals = db.getDataBetween(table, keys, str_date)
 
             try:
-                for i, key in enumerate(keys.split(',')):
+                for i, (key, hardLabel) in enumerate(zip(keys.split(','), hardLabels.split(','))):
                     device, typ, label = self.pfsbot.curveDict['%s-%s' % (table, key)]
-                    label = hardLabel if hardLabel is not None else label
+                    label = hardLabel if hardLabel else label
                     vals = self.checkValues(vals[:, i], typ)
-                    plot3.append((tstamp, vals, '%s' % device, Report.colors[col2]))
+                    plot3.append((tstamp, vals, '%s' % label, Report.colors[col2]))
 
             except Exception as e:
                 print e
