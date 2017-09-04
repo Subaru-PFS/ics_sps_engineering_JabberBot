@@ -29,6 +29,7 @@ from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
 from myjabberbot import JabberBot, botcmd
 from report import Report
+from expdata import Expdata
 
 
 class PfsBot(JabberBot):
@@ -58,6 +59,7 @@ class PfsBot(JabberBot):
         self.db.initDatabase()
 
         config_path = absPath.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery/config/'
+        self.config_path = config_path
         self.loadCfg(config_path)
         self.loadAlarm(config_path)
         self.loadFunctions()
@@ -244,6 +246,31 @@ class PfsBot(JabberBot):
                 return "Generating the report ..."
             else:
                 return "unknown argument"
+
+        else:
+            return "Do I know you ? Send me your email address by using the command record "
+
+
+    @botcmd
+    def data(self, mess, args):
+        """send a csv datafile to your email address
+           argument : date1(Y-m-d) date2(Y-m-d) sampling period (seconds)
+           ex : data 2017-09-01 2017-09-02 600
+                """
+        if len(args.split(' ')) == 3:
+            dstart = args.split(' ')[0].strip().lower()
+            dend = args.split(' ')[1].strip().lower()
+            step = float(args.split(' ')[2].strip().lower())
+        else:
+            return 'not enough arguments'
+
+        user = mess.getFrom().getNode()
+        if user in self.knownUsers:
+            dstart = dt.strptime(dstart, "%Y-%m-%d")
+            dend = dt.strptime(dend, "%Y-%m-%d")
+            exportData = Expdata(self, mess.getFrom(), dstart, dend, step)
+            exportData.start()
+            return "Generating the data ..."
 
         else:
             return "Do I know you ? Send me your email address by using the command record "
