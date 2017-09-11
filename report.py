@@ -27,7 +27,8 @@ class Report(Thread):
     def run(self):
         file_name = self.generate_pdf()
         if file_name:
-            address = self.pfsbot.knownUsers[self.user.getNode()]
+            knownUsers = self.pfsbot.unPickle("knownUsers")
+            address = knownUsers[self.user.getNode()]
             send_file(address, file_name, '[PFS] AIT Report')
             self.pfsbot.send(self.user, "I've just sent the report to %s" % address)
         else:

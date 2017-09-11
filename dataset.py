@@ -24,7 +24,8 @@ class Dataset(Thread):
         self.readCfg(self.pfsbot.config_path)
         fname = self.buildData()
         if fname:
-            address = self.pfsbot.knownUsers[self.user.getNode()]
+            knownUsers = self.pfsbot.unPickle("knownUsers")
+            address = knownUsers[self.user.getNode()]
             send_file(address, fname, '[PFS] AIT Data')
             self.pfsbot.send(self.user, "I've just sent the data to %s" % address)
         else:
