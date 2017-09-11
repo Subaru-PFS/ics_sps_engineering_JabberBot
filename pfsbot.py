@@ -27,9 +27,22 @@ from datetime import timedelta
 
 from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
+from dataset import Dataset
 from myjabberbot import JabberBot, botcmd
 from report import Report
-from dataset import Dataset
+
+
+class AlarmMsg(object):
+    def __init__(self, text, freq):
+        self.sent = None
+        self.txt = text
+        self.freq = freq
+
+    def sendable(self):
+        if self.sent is not None and (time.time() - self.sent) < self.freq:
+            return False
+        else:
+            return True
 
 
 class PfsBot(JabberBot):
@@ -51,8 +64,6 @@ class PfsBot(JabberBot):
         self.last_alert = time.time()
         self.last_awake = time.time()
 
-        self.loadStatus()
-
         self.db = DatabaseManager(addr, port)
         self.db.initDatabase()
 
@@ -71,36 +82,27 @@ class PfsBot(JabberBot):
     def cam(self):
         return self.actorList[-1].split('__')[-1].split('_')[-1]
 
-    def loadStatus(self):
-        self.userAlarm = self.unPickle("userAlarm")
-        self.listAlarm = self.unPickle("listAlarm")
-        self.timeoutAck = self.unPickle("timeoutAck", empty="list")
-        self.knownUsers = self.unPickle("knownUsers")
-
-
     @botcmd
     def alarm_mode(self, mess, args):
         """Be noticed by the alarms args : on/off"""
-        self.loadStatus()
+        userAlarm = self.unPickle("userAlarm")
 
         args = str(args)
         if args in ['on', 'off']:
             user = mess.getFrom().getNode()
             if args.strip() == 'on':
-                if user not in self.userAlarm.iterkeys():
-                    self.userAlarm[user] = mess.getFrom()
+                if user not in userAlarm.iterkeys():
+                    userAlarm[user] = mess.getFrom()
                     msg = "You are on Alarm MODE !"
                 else:
                     msg = "Stop harassing me please !"
             else:
-                if user in self.userAlarm.iterkeys():
-                    self.userAlarm.pop(user, None)
+                if user in userAlarm.iterkeys():
+                    userAlarm.pop(user, None)
                     msg = "You aren't on alarm MODE anymore !"
                 else:
                     msg = "Are you kidding me !?"
-            with open(self.path + 'userAlarm', 'w') as thisFile:
-                pickler = pickle.Pickler(thisFile)
-                pickler.dump(self.userAlarm)
+            self.doPickle('userAlarm', userAlarm)
             return msg
         else:
             return 'unknown args'
@@ -117,7 +119,8 @@ class PfsBot(JabberBot):
     @botcmd
     def alarm(self, mess, args):
         """alarm pressure|turbo|gatevalve|cooler  ack|off|on """
-        self.loadStatus()
+        listAlarm = self.unPickle("listAlarm")
+        msgAlarm = self.unPickle("msgAlarm")
 
         args = str(args)
         kind = {'on': 'activated', 'off': 'desactivated', 'ack': 'acknowledge'}
@@ -125,37 +128,31 @@ class PfsBot(JabberBot):
         if len(args.split(' ')) == 2:
             device = args.split(' ')[0].strip().lower()
             command = args.split(' ')[1].strip().lower()
-            if device not in self.listAlarm.iterkeys():
+            if device not in listAlarm.iterkeys():
                 device = '%s-%s' % (device, self.cam)
-            if device in self.listAlarm.iterkeys():
+            if device in listAlarm.iterkeys():
                 if command == 'on':
-                    if not self.listAlarm[device]:
-                        self.listAlarm[device] = True
-                        self.messageAlarm[device] = []
-                        with open(self.path + 'listAlarm', 'w') as thisFile:
-                            pickler = pickle.Pickler(thisFile)
-                            pickler.dump(self.listAlarm)
+                    if not listAlarm[device]:
+                        listAlarm[device] = True
+                        self.doPickle('listAlarm', listAlarm)
 
                     else:
                         return "Alarm %s was already activated " % device
                 elif command == 'off':
-                    if self.listAlarm[device]:
-                        self.listAlarm[device] = False
-                        with open(self.path + 'listAlarm', 'w') as thisFile:
-                            pickler = pickle.Pickler(thisFile)
-                            pickler.dump(self.listAlarm)
-
+                    if listAlarm[device]:
+                        listAlarm[device] = False
+                        self.doPickle('listAlarm', listAlarm)
                     else:
                         return "Alarm %s was already desactivated " % device
 
                 elif command == 'ack':
-                    self.messageAlarm[device] = []
-
+                    alarmKey = self.label2Table(device)
+                    msgAlarm.pop(alarmKey, None)
                 else:
                     return "unknown argument, I'm sure you meant on, off or ack"
             else:
                 return "device does not exist ! devices available : \n" + '\n'.join(
-                    [d for d in self.listAlarm.iterkeys()])
+                    [d for d in listAlarm.iterkeys()])
         else:
             return "not enough arguments, it's 'alarm device on|off|ack|rearm' FYI...  "
         self.sendAlarmMsg("Alarm %s %s by %s  on %s" % (device,
@@ -166,7 +163,7 @@ class PfsBot(JabberBot):
     @botcmd
     def timeout(self, mess, args):
         """timeout device ack|rearm """
-        self.loadStatus()
+        timeoutAck = self.unPickle("timeoutAck", empty="list")
 
         args = str(args)
         if len(args.split(' ')) == 2:
@@ -180,21 +177,16 @@ class PfsBot(JabberBot):
                 return "device does not exist ! devices available : \n" + '\n'.join(tableNames)
 
             if command == 'rearm':
-                if device in self.timeoutAck:
-                    self.timeoutAck.remove(device)
-                    with open(self.path + 'timeoutAck', 'w') as thisFile:
-                        pickler = pickle.Pickler(thisFile)
-                        pickler.dump(self.timeoutAck)
-
+                if device in timeoutAck:
+                    timeoutAck.remove(device)
+                    self.doPickle('timeoutAck', timeoutAck)
                 else:
                     return "Timeout %s was not acknowledge" % device
 
             elif command == 'ack':
-                if device not in self.timeoutAck:
-                    self.timeoutAck.append(device)
-                    with open(self.path + 'timeoutAck', 'w') as thisFile:
-                        pickler = pickle.Pickler(thisFile)
-                        pickler.dump(self.timeoutAck)
+                if device not in timeoutAck:
+                    timeoutAck.append(device)
+                    self.doPickle('timeoutAck', timeoutAck)
 
                 else:
                     return "Timeout %s was already acknowledge" % device
@@ -214,7 +206,7 @@ class PfsBot(JabberBot):
         """Get all parameters """
         user = mess.getFrom()
         res = ""
-        for attr in ['pressure', 'frontpressure', 'lam_pressure','ionpump1','ionpump2',
+        for attr in ['pressure', 'frontpressure', 'lam_pressure', 'ionpump1', 'ionpump2',
                      'cooler', 'temperature', 'ccd_temps', 'lam_temps1', 'lam_temps2']:
 
             try:
@@ -237,10 +229,11 @@ class PfsBot(JabberBot):
            ex : plot 1j
                 plot 6h
                 """
+        knownUsers = self.unPickle("knownUsers")
 
         tdelta = None
         user = mess.getFrom().getNode()
-        if user in self.knownUsers:
+        if user in knownUsers:
             ok = False
             fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes')]
             for f, kwarg in fmt:
@@ -260,13 +253,14 @@ class PfsBot(JabberBot):
         else:
             return "Do I know you ? Send me your email address by using the command record "
 
-
     @botcmd
     def dataset(self, mess, args):
         """send a csv dataset to your email address
            argument : date1(Y-m-d) date2(Y-m-d) sampling period (seconds)
            ex : dataset 2017-09-01 2017-09-02 600
                 """
+        knownUsers = self.unPickle("knownUsers")
+
         if len(args.split(' ')) == 3:
             dstart = args.split(' ')[0].strip().lower()
             dend = args.split(' ')[1].strip().lower()
@@ -275,7 +269,7 @@ class PfsBot(JabberBot):
             return 'not enough arguments'
 
         user = mess.getFrom().getNode()
-        if user in self.knownUsers:
+        if user in knownUsers:
             dstart = dt.strptime(dstart, "%Y-%m-%d")
             dend = dt.strptime(dend, "%Y-%m-%d")
             dataset = Dataset(self, mess.getFrom(), dstart, dend, step)
@@ -287,21 +281,23 @@ class PfsBot(JabberBot):
 
     @botcmd
     def record(self, mess, args):
-        self.loadStatus()
+        knownUsers = self.unPickle("knownUsers")
+
         user = mess.getFrom().getNode()
-        self.knownUsers[user] = args.strip()
-        with open(self.path + 'knowUsers', 'w') as thisFile:
-            pickler = pickle.Pickler(thisFile)
-            pickler.dump(self.knownUsers)
-            return "Thanks ! "
+        knownUsers[user] = args.strip()
+        self.doPickle('knowUsers', knownUsers)
+        return "Thanks ! "
 
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
-        self.loadStatus()
+        userAlarm = self.unPickle("userAlarm")
+        listAlarm = self.unPickle("listAlarm")
+        timeoutAck = self.unPickle("timeoutAck", empty="list")
 
-        return "%s\n %s\n %s\n" % (str([jid for jid in self.userAlarm.iterkeys()]),
-                                   str(self.listAlarm), str(self.timeoutAck))
+        return "%s\n %s\n %s\n" % (str([jid for jid in userAlarm.iterkeys()]),
+                                   str(listAlarm),
+                                   str(timeoutAck))
 
     @botcmd(hidden=True)
     def kill(self, mess, args):
@@ -314,7 +310,6 @@ class PfsBot(JabberBot):
             self.checkCriticalValue()
 
         if self.PING_FREQUENCY and time.time() - self.last_alert > self.ALERT_FREQ:
-            self.loadStatus()
             self.sendAlert()
             self.last_alert = time.time()
 
@@ -326,16 +321,21 @@ class PfsBot(JabberBot):
         pass
 
     def sendAlert(self):
+        listAlarm = self.unPickle("listAlarm")
+        timeoutAck = self.unPickle("timeoutAck", empty="list")
+        msgAlarm = self.unPickle("msgAlarm")
 
-        for device in self.listTimeout:
-            if device not in self.timeoutAck and self.isRelevant(device):
-                self.sendAlarmMsg("TIME OUT ON %s ! ! !" % device)
-        for device in self.criticalDevice:
-            name = device["label"].lower()
-            if self.listAlarm[name] and self.messageAlarm[name] and self.isRelevant(device["tablename"]):
-                self.sendAlarmMsg(self.messageAlarm[name][0])
+        for msgKey, msg in msgAlarm.iteritems():
+            typ, tablename, key = msgKey
+            if self.checkAlarmState(typ, tablename, key) and msg.sendable():
+                if self.isRelevant(tablename):
+                    self.sendAlarmMsg(msg.txt)
+                    msg.sent = time.time()
+
+        msgAlarm = self.doPickle("msgAlarm", msgAlarm)
 
     def checkCriticalValue(self):
+        msgAlarm = self.unPickle("msgAlarm")
 
         for device in self.criticalDevice:
             name = device["label"].lower()
@@ -350,9 +350,17 @@ class PfsBot(JabberBot):
                                                                             fmt.format(val),
                                                                             device["higher_bound"])
 
-                    self.messageAlarm[name] = [msg]
+                    msgKey = "tresh", device["tablename"], device["key"]
+
+                    if msgKey in msgAlarm.iterkeys():
+                        msgAlarm[msgKey].txt = msg
+                    else:
+                        msgAlarm[msgKey] = AlarmMsg(msg, self.ALERT_FREQ)
+
+                    self.doPickle('msgAlarm', msgAlarm)
 
     def checkTimeout(self):
+        msgAlarm = self.unPickle("msgAlarm")
 
         for f, tableName, key, label, unit, labelDevice in self.list_function:
             return_values = self.db.getLastData(tableName, "id")
@@ -364,28 +372,38 @@ class PfsBot(JabberBot):
 
                 date, id = return_values
                 prev_date, prev_time = self.last_date[tableName]
+
+                msgKey = "timeout", tableName, "id"
+                msg = "TIME OUT ON %s ! ! !" % tableName
+
                 if prev_date != date:
                     self.last_date[tableName] = date, dt.now()
-                    if tableName in self.listTimeout:
-                        self.listTimeout.remove(tableName)
+                    if msgKey in msgAlarm.iterkeys():
+                        msgAlarm.pop(msgKey, None)
+                        self.doPickle('msgAlarm', msgAlarm)
                 else:
                     if (dt.now() - prev_time).total_seconds() > PfsBot.TIMEOUT_LIM:
-                        if tableName not in self.listTimeout:
-                            self.listTimeout.append(tableName)
+                        if msgKey in msgAlarm.iterkeys():
+                            msgAlarm[msgKey].txt = msg
+                        else:
+                            msgAlarm[msgKey] = AlarmMsg(msg, self.ALERT_FREQ)
+
+                        self.doPickle('msgAlarm', msgAlarm)
 
     def sendAlarmMsg(self, mess):
+        userAlarm = self.unPickle("userAlarm")
+
         for m in mess.split('\r\n'):
             self.log.debug(m)
-        for jid in self.userAlarm.values():
+        for jid in userAlarm.values():
             self.send(jid, mess)
 
     def updateJID(self, jid):
+        userAlarm = self.unPickle("userAlarm")
         user = jid.getNode()
-        if user in self.userAlarm.iterkeys() and self.userAlarm[user] != jid:
-            self.userAlarm[user] = jid
-            with open(self.path + 'userAlarm', 'w') as thisFile:
-                pickler = pickle.Pickler(thisFile)
-                pickler.dump(self.userAlarm)
+        if user in userAlarm.iterkeys() and userAlarm[user] != jid:
+            userAlarm[user] = jid
+            self.doPickle('userAlarm', userAlarm)
 
     def loadCfg(self, path):
         res = []
@@ -418,8 +436,10 @@ class PfsBot(JabberBot):
 
     def loadAlarm(self, path):
 
+        listAlarm = self.unPickle("listAlarm")
+
         self.criticalDevice = []
-        self.messageAlarm = {}
+
         config = ConfigParser.ConfigParser()
         config.readfp(open(path + 'alarm.cfg'))
         for a in config.sections():
@@ -430,15 +450,11 @@ class PfsBot(JabberBot):
         for device in self.criticalDevice:
             try:
                 name = device["label"].lower()
-                a = self.listAlarm[name]
+                a = listAlarm[name]
             except KeyError:
-                self.listAlarm[name] = False
+                listAlarm[name] = False
 
-            self.messageAlarm[name] = []
-
-        with open(self.path + 'listAlarm', 'w') as thisFile:
-            pickler = pickle.Pickler(thisFile)
-            pickler.dump(self.listAlarm)
+        self.doPickle('listAlarm', listAlarm)
 
     def loadTimeout(self):
         self.listTimeout = []
@@ -490,3 +506,28 @@ class PfsBot(JabberBot):
             return True
         else:
             return False
+
+    def doPickle(self, filename, var):
+        with open(self.path + filename, 'w') as thisFile:
+            pickler = pickle.Pickler(thisFile)
+            pickler.dump(var)
+
+    def checkAlarmState(self, typ, tablename, key):
+        listAlarm = self.unPickle("listAlarm")
+        timeoutAck = self.unPickle("timeoutAck", empty="list")
+        if typ == "tresh":
+            for device in self.criticalDevice:
+                if device['tablename'] == tablename and device['key'] == key:
+                    break
+            return listAlarm[device['label'].lower()]
+        else:
+            if tablename not in timeoutAck:
+                return True
+
+        return False
+
+    def label2Table(self, label):
+        for device in self.criticalDevice:
+            if device['label'].lower() == label:
+                break
+        return "tresh", device["tablename"], device["key"]
