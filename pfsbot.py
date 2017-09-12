@@ -48,7 +48,7 @@ class AlarmMsg(object):
 class PfsBot(JabberBot):
     """This is a simple broadcasting client """
     TIMEOUT_LIM = 90
-    ALERT_FREQ = 60
+    ALERT_FREQ = 65
 
     def __init__(self, jid, password, absPath, logFolder, addr, port, actorList):
         self.log = logging.getLogger('JabberBot.PfsBot')
@@ -285,7 +285,7 @@ class PfsBot(JabberBot):
 
         user = mess.getFrom().getNode()
         knownUsers[user] = args.strip()
-        self.doPickle('knowUsers', knownUsers)
+        self.doPickle('knownUsers', knownUsers)
         return "Thanks ! "
 
     @botcmd(hidden=True)
@@ -306,8 +306,8 @@ class PfsBot(JabberBot):
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.get_ping() > self.PING_FREQUENCY:
             self._idle_ping()
-            self.checkTimeout()
-            self.checkCriticalValue()
+            msgAlarm = self.checkTimeout()
+            self.checkCriticalValue(msgAlarm)
 
         if self.PING_FREQUENCY and time.time() - self.last_alert > self.ALERT_FREQ:
             self.sendAlert()
@@ -321,8 +321,6 @@ class PfsBot(JabberBot):
         pass
 
     def sendAlert(self):
-        listAlarm = self.unPickle("listAlarm")
-        timeoutAck = self.unPickle("timeoutAck", empty="list")
         msgAlarm = self.unPickle("msgAlarm")
 
         for msgKey, msg in msgAlarm.iteritems():
@@ -332,10 +330,9 @@ class PfsBot(JabberBot):
                     self.sendAlarmMsg(msg.txt)
                     msg.sent = time.time()
 
-        msgAlarm = self.doPickle("msgAlarm", msgAlarm)
+        self.doPickle("msgAlarm", msgAlarm)
 
-    def checkCriticalValue(self):
-        msgAlarm = self.unPickle("msgAlarm")
+    def checkCriticalValue(self, msgAlarm):
 
         for device in self.criticalDevice:
             name = device["label"].lower()
@@ -357,7 +354,7 @@ class PfsBot(JabberBot):
                     else:
                         msgAlarm[msgKey] = AlarmMsg(msg, self.ALERT_FREQ)
 
-                    self.doPickle('msgAlarm', msgAlarm)
+        self.doPickle('msgAlarm', msgAlarm)
 
     def checkTimeout(self):
         msgAlarm = self.unPickle("msgAlarm")
@@ -380,7 +377,6 @@ class PfsBot(JabberBot):
                     self.last_date[tableName] = date, dt.now()
                     if msgKey in msgAlarm.iterkeys():
                         msgAlarm.pop(msgKey, None)
-                        self.doPickle('msgAlarm', msgAlarm)
                 else:
                     if (dt.now() - prev_time).total_seconds() > PfsBot.TIMEOUT_LIM:
                         if msgKey in msgAlarm.iterkeys():
@@ -388,7 +384,7 @@ class PfsBot(JabberBot):
                         else:
                             msgAlarm[msgKey] = AlarmMsg(msg, self.ALERT_FREQ)
 
-                        self.doPickle('msgAlarm', msgAlarm)
+        return msgAlarm
 
     def sendAlarmMsg(self, mess):
         userAlarm = self.unPickle("userAlarm")
@@ -499,6 +495,14 @@ class PfsBot(JabberBot):
         except IOError:
             self.log.debug("creating empty %s file" % filename)
             return {} if empty is None else []
+        except EOFError:
+            time.sleep(1)
+            return self.unPickle(filename=filename, empty=empty)
+
+    def doPickle(self, filename, var):
+        with open(self.path + filename, 'w') as thisFile:
+            pickler = pickle.Pickler(thisFile)
+            pickler.dump(var)
 
     def isRelevant(self, tableName):
         actor = tableName.split('__')[0]
@@ -507,14 +511,10 @@ class PfsBot(JabberBot):
         else:
             return False
 
-    def doPickle(self, filename, var):
-        with open(self.path + filename, 'w') as thisFile:
-            pickler = pickle.Pickler(thisFile)
-            pickler.dump(var)
-
     def checkAlarmState(self, typ, tablename, key):
         listAlarm = self.unPickle("listAlarm")
         timeoutAck = self.unPickle("timeoutAck", empty="list")
+
         if typ == "tresh":
             for device in self.criticalDevice:
                 if device['tablename'] == tablename and device['key'] == key:
