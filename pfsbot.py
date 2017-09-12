@@ -61,8 +61,6 @@ class PfsBot(JabberBot):
         self.curveDict = {}
         self.thread_killed = False
         self.path = absPath
-        self.last_alert = time.time()
-        self.last_awake = time.time()
 
         self.db = DatabaseManager(addr, port)
         self.db.initDatabase()
@@ -135,9 +133,9 @@ class PfsBot(JabberBot):
                     if not listAlarm[device]:
                         listAlarm[device] = True
                         self.doPickle('listAlarm', listAlarm)
-
                     else:
                         return "Alarm %s was already activated " % device
+
                 elif command == 'off':
                     if listAlarm[device]:
                         listAlarm[device] = False
@@ -148,6 +146,7 @@ class PfsBot(JabberBot):
                 elif command == 'ack':
                     alarmKey = self.label2Table(device)
                     msgAlarm.pop(alarmKey, None)
+                    self.doPickle('msgAlarm', msgAlarm)
                 else:
                     return "unknown argument, I'm sure you meant on, off or ack"
             else:
@@ -309,13 +308,11 @@ class PfsBot(JabberBot):
             msgAlarm = self.checkTimeout()
             self.checkCriticalValue(msgAlarm)
 
-        if self.PING_FREQUENCY and time.time() - self.last_alert > self.ALERT_FREQ:
+        if self.PING_FREQUENCY and time.time() - self.get_alert() > self.ALERT_FREQ:
             self.sendAlert()
-            self.last_alert = time.time()
 
-        if self.PING_FREQUENCY and time.time() - self.last_awake > 6:
+        if self.PING_FREQUENCY and time.time() - self.get_awake() > self.PING_FREQUENCY/2:
             self._send_status()
-            self.last_awake = time.time()
 
     def thread_proc(self):
         pass
@@ -331,6 +328,7 @@ class PfsBot(JabberBot):
                     msg.sent = time.time()
 
         self.doPickle("msgAlarm", msgAlarm)
+        self._set_alert()
 
     def checkCriticalValue(self, msgAlarm):
 
@@ -481,11 +479,6 @@ class PfsBot(JabberBot):
     def loadFunctions(self):
         for f, tableName, key, label, unit, labelDevice in self.list_function:
             self.bindFunction(f, tableName, key, label, unit, labelDevice)
-
-    def tellAwake(self):
-
-        self.sendAlarmMsg("It's %s UTC and I just woke up. \r  Have a nice day or night whatever ..."
-                          % dt.now().strftime("%H:%M"))
 
     def unPickle(self, filename, empty=None):
         try:

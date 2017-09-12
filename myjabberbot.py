@@ -140,6 +140,8 @@ class JabberBot(object):
         self.__seen = {}
         self.__threads = {}
         self.__lastping = time.time()
+        self.__lastawake  = time.time()
+        self.__lastalert = time.time()
         self.__privatedomain = privatedomain
         self.__acceptownmsgs = acceptownmsgs
         self.__command_prefix = command_prefix
@@ -164,6 +166,7 @@ class JabberBot(object):
         """Send status to everyone"""
         self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
                                                 status=self.__status))
+        self.__lastawake = time.time()
 
     def __set_status(self, value):
         """Set status message.
@@ -746,5 +749,14 @@ class JabberBot(object):
 
     def get_ping(self):
         return self.__lastping
+
+    def get_awake(self):
+        return self.__lastawake
+
+    def get_alert(self):
+        return self.__lastalert
+
+    def _set_alert(self):
+        self.__lastalert = time.time()
 
 # vim: expandtab tabstop=4 shiftwidth=4 softtabstop=4
