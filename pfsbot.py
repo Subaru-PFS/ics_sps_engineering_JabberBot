@@ -24,7 +24,7 @@ import time
 import types
 from datetime import datetime as dt
 from datetime import timedelta
-
+import random
 from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
 from dataset import Dataset
@@ -489,7 +489,8 @@ class PfsBot(JabberBot):
             self.log.debug("creating empty %s file" % filename)
             return {} if empty is None else []
         except EOFError:
-            time.sleep(1)
+            self.log.debug("except EOFError")
+            time.sleep(0.5+2*random.random())
             return self.unPickle(filename=filename, empty=empty)
 
     def doPickle(self, filename, var):
