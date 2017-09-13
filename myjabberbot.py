@@ -32,7 +32,7 @@ import os
 import re
 import sys
 import thread
-
+import traceback as tb
 try:
     import xmpp
 except ImportError:
@@ -741,6 +741,10 @@ class JabberBot(object):
             except KeyboardInterrupt:
                 self.log.info('bot stopped by user request. shutting down.')
                 break
+            except Exception as e:
+                self.log.warn('PfsBot crashed for unexpected reasons')
+                self.log.warn(self.formatException(e))
+                break
 
         self.shutdown()
 
@@ -759,4 +763,15 @@ class JabberBot(object):
     def _set_alert(self):
         self.__lastalert = time.time()
 
-# vim: expandtab tabstop=4 shiftwidth=4 softtabstop=4
+    def formatException(self, e):
+        """ Format the caught exception as a string
+
+        :param e: caught exception
+        :param traceback: exception traceback
+        """
+        traceback = sys.exc_info()[2]
+
+        def clean(string):
+            return str(string).replace("'", "").replace('"', "")
+
+        return "%s %s %s" % (clean(type(e)), clean(type(e)(*e.args)), clean(tb.format_tb(traceback, limit=1)[0]))
