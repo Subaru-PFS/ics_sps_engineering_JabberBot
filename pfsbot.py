@@ -206,7 +206,7 @@ class PfsBot(JabberBot):
         user = mess.getFrom()
         res = ""
         for attr in ['pressure', 'frontpressure', 'lam_pressure', 'ionpump1', 'ionpump2',
-                     'cooler', 'temperature', 'ccd_temps', 'lam_temps1', 'lam_temps2']:
+                     'cooler', 'temperature', 'ccdtemps', 'lamtemps1', 'lamtemps2']:
 
             try:
                 func = getattr(self, attr)
@@ -339,11 +339,11 @@ class PfsBot(JabberBot):
             if type(return_values) is not int:
                 date, [val] = return_values
                 fmt = "{:.5e}" if len(str(val)) > 8 else "{:.2f}"
-                if not float(device["lower_bound"]) <= val < float(device["higher_bound"]):
+                if not float(device["lower_bound"]) <= val < float(device["upper_bound"]):
                     msg = "WARNING ! %s OUT OF RANGE \r\n %s <= %s < %s" % (device["label"],
                                                                             device["lower_bound"],
                                                                             fmt.format(val),
-                                                                            device["higher_bound"])
+                                                                            device["upper_bound"])
 
                     msgKey = "tresh", device["tablename"], device["key"]
 
@@ -400,6 +400,10 @@ class PfsBot(JabberBot):
             self.doPickle('userAlarm', userAlarm)
 
     def loadCfg(self, path):
+        datatype = ConfigParser.ConfigParser()
+        datatype.read('%s/datatype.cfg' % path)
+        datatype = datatype._sections
+
         res = []
         allFile = next(os.walk(path))[-1]
         for f in allFile:
@@ -416,16 +420,22 @@ class PfsBot(JabberBot):
         for a in config.sections():
             if a != 'config_date':
                 tableName = a
-                fname = config.get(a, "bot_cmd")
-                key = config.get(a, 'key')
-                label = config.get(a, 'label')
-                unit = config.get(a, 'unit')
-                labelDevice = config.get(a, 'label_device')
+                keys = [k.strip() for k in config.get(a, 'key').split(',')]
+                types = [t.strip() for t in config.get(a, 'type').split(',')]
+                units = [datatype[t]['unit'] for t in types]
+
+                labelDevice = (a.split('__')[1]).capitalize() if "label_device" not in config.options(a) \
+                                                              else config.get(a, 'label_device')
+
+                labels = keys if "label" not in config.options(a) \
+                              else [l.strip() for l in config.get(a, 'label').split(',')]
+
+                fname = (a.split('__')[1]).lower() if "bot_cmd" not in config.options(a) else config.get(a, 'bot_cmd')
+
                 if self.isRelevant(tableName):
-                    self.list_function.append((fname, tableName.lower(), key, label, unit, labelDevice))
-                    for k, l, t in zip([k.strip() for k in key.split(',')],
-                                       [l.strip() for l in label.split(',')],
-                                       [t.strip() for t in config.get(a, 'type').split(',')]):
+                    self.list_function.append((fname, tableName.lower(), ','.join(keys), ','.join(labels),
+                                               ','.join(units), labelDevice))
+                    for k, l, t in zip(keys, labels, types):
                         self.curveDict["%s-%s" % (tableName, k)] = labelDevice, t, l
 
     def loadAlarm(self, path):
@@ -463,11 +473,16 @@ class PfsBot(JabberBot):
             return_values = self.db.getLastData(tableName, key)
             if type(return_values) is not int:
                 date, vals = return_values
-                formats = ["{:.3e}" if uni.strip() in ['Torr', 'mBar', 'Bar'] else '{:.2f}' for uni in
-                           unit.split(',')]
-                return date + "\n -= %s =-" % labelDevice + "".join(
-                    ["\n %s (%s) = %s" % (lab.strip(), uni.strip(), fmt.format(val)) for fmt, lab, uni, val in
-                     zip(formats, label.split(','), unit.split(','), vals)])
+                formats = ["{:g}" for uni in unit.split(',')]
+
+                msg = date + "\n -= %s =-" % labelDevice
+                msg += "".join(["\n %s (%s) = %s" % (lab.strip(),
+                                                     uni.strip(),
+                                                     fmt.format(val)) for fmt, lab, uni, val in zip(formats,
+                                                                                                    label.split(','),
+                                                                                                    unit.split(','),
+                                                                                                    vals)])
+                return msg
             else:
                 return "error code : %i" % return_values
 

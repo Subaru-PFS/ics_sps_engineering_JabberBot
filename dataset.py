@@ -34,6 +34,10 @@ class Dataset(Thread):
         return
 
     def readCfg(self, path):
+        datatype = ConfigParser.ConfigParser()
+        datatype.read('%s/datatype.cfg' % path)
+        datatype = datatype._sections
+
         res = []
         all_file = next(os.walk(path))[-1]
         for f in all_file:
@@ -56,19 +60,23 @@ class Dataset(Thread):
         else:
             res.sort(key=lambda tup: tup[1])
             config.readfp(open(path + res[0][0]))
-
         for a in config.sections():
             if a != 'config_date':
                 tableName = a
-                fname = config.get(a, "bot_cmd")
-                key = config.get(a, 'key')
-                label = config.get(a, 'label')
-                unit = config.get(a, 'unit')
-                labelDevice = config.get(a, 'label_device')
+                keys = [k.strip() for k in config.get(a, 'key').split(',')]
+                types = [t.strip() for t in config.get(a, 'type').split(',')]
+                units = [datatype[t]['unit'] for t in types]
+
+                labelDevice = (a.split('__')[1]).capitalize() if "label_device" not in config.options(a) \
+                                                              else config.get(a, 'label_device')
+
+                labels = keys if "label" not in config.options(a) \
+                              else [l.strip() for l in config.get(a, 'label').split(',')]
+
+                fname = (a.split('__')[1]).lower() if "bot_cmd" not in config.options(a) else config.get(a, 'bot_cmd')
+
                 if self.pfsbot.isRelevant(tableName):
-                    for k, l, t in zip([k.strip() for k in key.split(',')],
-                                       [l.strip() for l in label.split(',')],
-                                       [t.strip() for t in config.get(a, 'type').split(',')]):
+                    for k, l, t in zip(keys, labels, types):
                         self.curveDict["%s-%s" % (tableName, k)] = labelDevice, t, l
 
     def buildData(self, ftime=1.1574073384205501e-5):
