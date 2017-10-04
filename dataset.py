@@ -21,7 +21,7 @@ class Dataset(Thread):
         self.step = step
 
     def run(self):
-        self.readCfg(self.pfsbot.config_path)
+        #self.readCfg(self.pfsbot.config_path)
         fname = self.buildData()
         if fname:
             knownUsers = self.pfsbot.unPickle("knownUsers")
@@ -70,8 +70,8 @@ class Dataset(Thread):
                 labelDevice = (a.split('__')[1]).capitalize() if "label_device" not in config.options(a) \
                                                               else config.get(a, 'label_device')
 
-                labels = keys if "label" not in config.options(a) \
-                              else [l.strip() for l in config.get(a, 'label').split(',')]
+                labels = [k.capitalize() for k in keys] if "label" not in config.options(a) \
+                                                        else [l.strip() for l in config.get(a, 'label').split(',')]
 
                 fname = (a.split('__')[1]).lower() if "bot_cmd" not in config.options(a) else config.get(a, 'bot_cmd')
 

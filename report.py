@@ -8,7 +8,7 @@ from matplotlib.dates import DateFormatter
 from matplotlib.backends.backend_pdf import PdfPages
 
 from threading import Thread
-from exportdata import exportData, send_file
+from exportdata import exportData, send_file, fmtDate
 from datetime import datetime as dt
 
 
@@ -35,13 +35,15 @@ class Report(Thread):
             self.pfsbot.send(self.user, "an error has occured")
         return
 
-    def generate_pdf(self):
+    def generate_pdf(self, ftime=1.1574073384205501e-5):
         fig1 = None
         fig2 = None
         fig3 = None
 
         plot1, plot2, plot3, plot4 = exportData(pfsbot=self.pfsbot, dates=[self.str_date], rm=["Field Lens",
                                                                                                'Red Tube2'])
+        plots = plot1 + plot2 + plot3 + plot4
+
         if plot1:
             fig1 = plt.figure()
             ax1 = fig1.add_subplot(111)
@@ -166,9 +168,15 @@ class Report(Thread):
             ax4.xaxis.set_major_formatter(DateFormatter(self.getDateFormat(ax4.get_xlim())))
             plt.setp(ax4.xaxis.get_majorticklabels(), rotation=75, horizontalalignment='right')
 
-        file_name = '%s/PFS_AIT_Report-%s_%s.pdf' % (self.pfsbot.logFolder,
-                                                     self.pfsbot.cam.upper(),
-                                                     dt.now().strftime("%Y-%m-%d_%H-%M"))
+            samp_start = max([data.tstamp[0] for data in plots])
+            samp_end = min([data.tstamp[-1] for data in plots])
+
+            duration = round((samp_end - samp_start) / (ftime*3600*24))
+
+            file_name = '%s/PFS_AIT_Report-%s_%s-%iDays.pdf' % (self.pfsbot.logFolder,
+                                                                self.pfsbot.cam.upper(),
+                                                                fmtDate(samp_start, "%Y-%m-%d"),
+                                                                duration)
 
         if fig1 is not None or fig2 is not None or fig3 is not None:
             with PdfPages(file_name) as pdf:

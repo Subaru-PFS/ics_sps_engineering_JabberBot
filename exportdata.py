@@ -59,11 +59,11 @@ def exportData(pfsbot, dates, rm):
 
     for allc in [allc1, allc2, allc3]:
         for i, elem in enumerate(allc):
-            vkeys = ','.join(
-                [k for k in elem[1].split(',') if '%s-%s' % (elem[0], k) in pfsbot.curveDict.iterkeys()])
+            vkeys = ','.join([k for k in elem[1].split(',')
+                              if '%s-%s' % (elem[0], k) in pfsbot.curveDict.iterkeys()])
 
-            allc[i] = (elem[0], vkeys, ',' * len(elem[1].split(','))) if len(elem) == 2 else (
-                elem[0], vkeys, elem[2])
+            allc[i] = (elem[0], vkeys, ',' * len(elem[1].split(','))) if len(elem) == 2 \
+                                                                      else (elem[0], vkeys, elem[2])
 
     allc1 = [curve for curve in allc1 if curve[1]]
     allc2 = [curve for curve in allc2 if curve[1]]
