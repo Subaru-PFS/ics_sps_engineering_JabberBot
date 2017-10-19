@@ -287,6 +287,33 @@ class PfsBot(JabberBot):
         self.doPickle('knownUsers', knownUsers)
         return "Thanks ! "
 
+    @botcmd
+    def mode(self, mess, args):
+        knownModes = [file for file in os.listdir('%s/alarm/' % self.config_path) if file.endswith(".cfg")]
+        knownModes.remove('mode.cfg')
+
+        if len(args.split(' ')) == 1:
+            actor = 'xcu_%s' % self.cam
+            mode = args.split(' ')[0].strip().lower()
+
+        elif len(args.split(' ')) == 2:
+            actor = args.split(' ')[0].strip().lower()
+            mode = args.split(' ')[1].strip().lower()
+        else:
+            return 'not enough arguments'
+
+        modes = self.unPickle("mode.cfg", path='%s/alarm/' % self.config_path)
+        if actor not in modes.iterkeys():
+            return 'unknown actor'
+        if '%s.cfg' % mode not in knownModes:
+            return 'unknown mode'
+
+        modes[actor] = mode
+
+        self.doPickle('mode.cfg', modes, path='%s/alarm/' % self.config_path)
+
+        return "%s is now in %s" % (actor, mode)
+
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
         """WHO Suscribe to the alarm"""
@@ -425,10 +452,10 @@ class PfsBot(JabberBot):
                 units = [datatype[t]['unit'] for t in types]
 
                 labelDevice = (a.split('__')[1]).capitalize() if "label_device" not in config.options(a) \
-                                                              else config.get(a, 'label_device')
+                    else config.get(a, 'label_device')
 
                 labels = keys if "label" not in config.options(a) \
-                              else [l.strip() for l in config.get(a, 'label').split(',')]
+                    else [l.strip() for l in config.get(a, 'label').split(',')]
 
                 fname = (a.split('__')[1]).lower() if "bot_cmd" not in config.options(a) else config.get(a, 'bot_cmd')
 
