@@ -65,10 +65,10 @@ class PfsBot(JabberBot):
         self.db = DatabaseManager(addr, port)
         self.db.initDatabase()
 
-        config_path = absPath.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery/config/'
+        config_path = absPath.split('ics_sps_engineering_JabberBot')[0] + 'ics_sps_engineering_Lib_dataQuery'
         self.config_path = config_path
-        self.loadCfg(config_path)
-        self.loadAlarm(config_path)
+        self.loadCfg('%s/config/'%config_path)
+        self.loadAlarm('%s/alarm/'%config_path)
         self.loadFunctions()
         self.loadTimeout()
 
@@ -438,25 +438,31 @@ class PfsBot(JabberBot):
                     for k, l, t in zip(keys, labels, types):
                         self.curveDict["%s-%s" % (tableName, k)] = labelDevice, t, l
 
-    def loadAlarm(self, path):
+    def loadAlarm(self, path, doActivate=False):
 
         listAlarm = self.unPickle("listAlarm")
-
         self.criticalDevice = []
 
-        config = ConfigParser.ConfigParser()
-        config.readfp(open(path + 'alarm.cfg'))
-        for a in config.sections():
-            dict = {"label": a}
-            for b in config.options(a):
-                dict[b] = config.get(a, b)
-            self.criticalDevice.append(dict)
+        with open(path + 'mode.cfg', 'r') as thisFile:
+            unpickler = pickle.Unpickler(thisFile)
+            modes = unpickler.load()
+
+        for actor, mode in modes.iteritems():
+            config = ConfigParser.ConfigParser()
+            config.readfp(open(path + '%s.cfg' % mode))
+            sections = [a for a in config.sections() if actor in config.get(a, 'tablename')]
+            for a in sections:
+                dict = {"label": a, "mode": mode}
+                for b in config.options(a):
+                    dict[b] = config.get(a, b)
+                self.criticalDevice.append(dict)
+
         for device in self.criticalDevice:
+            name = device["label"].lower()
             try:
-                name = device["label"].lower()
-                a = listAlarm[name]
+                listAlarm[name] = True if doActivate else listAlarm[name]
             except KeyError:
-                listAlarm[name] = False
+                listAlarm[name] = True
 
         self.doPickle('listAlarm', listAlarm)
 
