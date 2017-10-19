@@ -2,7 +2,7 @@ import ConfigParser
 import os
 from datetime import datetime as dt
 from threading import Thread
-
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
@@ -82,9 +82,9 @@ class Dataset(Thread):
     def buildData(self, ftime=1.1574073384205501e-5):
 
         dates = [self.dstart.strftime("%d/%m/%Y %H:%M:%S"), self.dend.strftime("%d/%m/%Y %H:%M:%S")]
-
         plot1, plot2, plot3, plot4 = exportData(pfsbot=self.pfsbot, dates=dates, rm=[])
         plots = plot1 + plot2 + plot3 + plot4
+
         if plots:
             samp_start = np.max([data.tstamp[0] for data in plots])
             samp_end = np.min([data.tstamp[-1] for data in plots])
@@ -92,8 +92,9 @@ class Dataset(Thread):
 
             ti = np.arange(samp_start, samp_end, step)
             duration = round((ti[-1] - ti[0]) / (ftime*3600*24))
-
-            datas = {'Time': [fmtDate(t) for t in ti]}
+            
+            datas = OrderedDict()          
+            datas['Time'] = [fmtDate(t) for t in ti]
 
             for data in plots:
                 datas[data.label] = np.interp(ti, data.tstamp, data.vals)

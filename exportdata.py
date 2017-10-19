@@ -95,7 +95,7 @@ def exportData(pfsbot, dates, rm):
                 if label not in rm:
                     offset = 273.15 if typ == 'temperature_c' else 0
                     vals += offset
-                    if np.mean(vals) < 270:
+                    if np.min(vals[~np.isnan(vals)]) < 270:
                         label = checkLabel(plot2, label)
                         plot2.append(Data(tstamp, vals, '%s' % label, colors[col2]))
                         col2 += 1
@@ -124,6 +124,12 @@ def exportData(pfsbot, dates, rm):
             print table, keys, hardLabels
 
     db.closeDatabase()
+
+    plot1 = [data for label, data in sorted([(data.label, data) for data in plot1], key=lambda tup: tup[0])] if plot1 else []
+    plot2 = [data for label, data in sorted([(data.label, data) for data in plot2], key=lambda tup: tup[0])] if plot2 else []
+    plot3 = [data for label, data in sorted([(data.label, data) for data in plot3], key=lambda tup: tup[0])] if plot3 else []
+    plot4 = [data for label, data in sorted([(data.label, data) for data in plot4], key=lambda tup: tup[0])] if plot4 else []
+            
 
     return plot1, plot2, plot3, plot4
 
