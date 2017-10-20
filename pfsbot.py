@@ -311,8 +311,11 @@ class PfsBot(JabberBot):
         modes[actor] = mode
 
         self.doPickle('mode.cfg', modes, path='%s/alarm/' % self.config_path)
-
-        return "%s is now in %s" % (actor, mode)
+        self.loadAlarm('%s/alarm/' % self.config_path, activateActor=actor)
+        self.sendAlarmMsg("%s is now in %s mode (by %s  on %s )" % (actor,
+                                                                    mode,
+                                                                    str(mess.getFrom().getNode()),
+                                                                    dt.now().isoformat()))
 
     @botcmd(hidden=True)
     def curious_guy(self, mess, args):
@@ -372,7 +375,7 @@ class PfsBot(JabberBot):
                                                                             fmt.format(val),
                                                                             device["upper_bound"])
 
-                    msgKey = "tresh", device["tablename"], device["key"]
+                    msgKey = "outrange", device["tablename"], device["key"]
 
                     if msgKey in msgAlarm.iterkeys():
                         msgAlarm[msgKey].txt = msg
@@ -465,7 +468,8 @@ class PfsBot(JabberBot):
                     for k, l, t in zip(keys, labels, types):
                         self.curveDict["%s-%s" % (tableName, k)] = labelDevice, t, l
 
-    def loadAlarm(self, path, doActivate=False):
+    def loadAlarm(self, path, activateActor=' '):
+        doErase = True if activateActor != ' ' else False
 
         listAlarm = self.unPickle("listAlarm", path='%s/alarm/' % self.config_path)
         self.criticalDevice = []
@@ -486,12 +490,25 @@ class PfsBot(JabberBot):
 
         for device in self.criticalDevice:
             name = device["label"].lower()
+            tablename = device["tablename"].strip()
             try:
-                listAlarm[name] = True if doActivate else listAlarm[name]
+                listAlarm[name] = True if (activateActor in tablename) else listAlarm[name]
             except KeyError:
                 listAlarm[name] = True
 
         self.doPickle('listAlarm', listAlarm, path='%s/alarm/' % self.config_path)
+
+        if doErase:
+            self.eraseMsgAlarm(activateActor)
+
+    def eraseMsgAlarm(self, actor):
+        msgAlarm = self.unPickle("msgAlarm")
+        todel = [(typ, table, k) for (typ, table, k) in msgAlarm.iterkeys() if (typ == 'outrange' and actor in table)]
+
+        for key in todel:
+            msgAlarm.pop(key, None)
+
+        self.doPickle('msgAlarm', msgAlarm)
 
     def loadTimeout(self):
         self.listTimeout = []
@@ -561,7 +578,7 @@ class PfsBot(JabberBot):
         listAlarm = self.unPickle("listAlarm", path='%s/alarm/' % self.config_path)
         timeoutAck = self.unPickle("timeoutAck", path='%s/alarm/' % self.config_path, empty="list")
 
-        if typ == "tresh":
+        if typ == "outrange":
             for device in self.criticalDevice:
                 if device['tablename'] == tablename and device['key'] == key:
                     break
@@ -576,4 +593,4 @@ class PfsBot(JabberBot):
         for device in self.criticalDevice:
             if device['label'].lower() == label:
                 break
-        return "tresh", device["tablename"], device["key"]
+        return "outrange", device["tablename"], device["key"]
