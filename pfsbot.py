@@ -311,7 +311,7 @@ class PfsBot(JabberBot):
         modes[actor] = mode
 
         self.doPickle('mode.cfg', modes, path='%s/alarm/' % self.config_path)
-        self.loadAlarm('%s/alarm/' % self.config_path, activateActor=actor)
+        self.loadAlarm('%s/alarm/' % self.config_path, rearmActor=actor)
         self.sendAlarmMsg("%s is now in %s mode (by %s  on %s )" % (actor,
                                                                     mode,
                                                                     str(mess.getFrom().getNode()),
@@ -468,8 +468,8 @@ class PfsBot(JabberBot):
                     for k, l, t in zip(keys, labels, types):
                         self.curveDict["%s-%s" % (tableName, k)] = labelDevice, t, l
 
-    def loadAlarm(self, path, activateActor=' '):
-        doErase = True if activateActor != ' ' else False
+    def loadAlarm(self, path, rearmActor=' '):
+        doErase = True if rearmActor != ' ' else False
 
         listAlarm = self.unPickle("listAlarm", path='%s/alarm/' % self.config_path)
         self.criticalDevice = []
@@ -492,14 +492,14 @@ class PfsBot(JabberBot):
             name = device["label"].lower()
             tablename = device["tablename"].strip()
             try:
-                listAlarm[name] = True if (activateActor in tablename) else listAlarm[name]
+                listAlarm[name] = True if (rearmActor in tablename) else listAlarm[name]
             except KeyError:
                 listAlarm[name] = True
 
         self.doPickle('listAlarm', listAlarm, path='%s/alarm/' % self.config_path)
 
         if doErase:
-            self.eraseMsgAlarm(activateActor)
+            self.eraseMsgAlarm(rearmActor)
 
     def eraseMsgAlarm(self, actor):
         msgAlarm = self.unPickle("msgAlarm")
