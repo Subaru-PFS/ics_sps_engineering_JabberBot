@@ -361,7 +361,6 @@ class PfsBot(JabberBot):
         self._set_alert()
 
     def checkCriticalValue(self, msgAlarm):
-
         for device in self.criticalDevice:
             name = device["label"].lower()
             return_values = self.db.getLastData(device["tablename"], device["key"])
@@ -477,17 +476,18 @@ class PfsBot(JabberBot):
         with open(path + 'mode.cfg', 'r') as thisFile:
             unpickler = pickle.Unpickler(thisFile)
             modes = unpickler.load()
-
+        
         for actor, mode in modes.iteritems():
             config = ConfigParser.ConfigParser()
             config.readfp(open(path + '%s.cfg' % mode))
-            sections = [a for a in config.sections() if actor in config.get(a, 'tablename')]
+            sections = [a for a in config.sections() if (actor in config.get(a, 'tablename') and self.isRelevant(config.get(a,'tablename')))]
+
             for a in sections:
                 dict = {"label": a, "mode": mode}
                 for b in config.options(a):
                     dict[b] = config.get(a, b)
                 self.criticalDevice.append(dict)
-
+        
         for device in self.criticalDevice:
             name = device["label"].lower()
             tablename = device["tablename"].strip()
@@ -504,10 +504,8 @@ class PfsBot(JabberBot):
     def eraseMsgAlarm(self, actor):
         msgAlarm = self.unPickle("msgAlarm")
         todel = [(typ, table, k) for (typ, table, k) in msgAlarm.iterkeys() if (typ == 'outrange' and actor in table)]
-
         for key in todel:
             msgAlarm.pop(key, None)
-
         self.doPickle('msgAlarm', msgAlarm)
 
     def loadTimeout(self):
