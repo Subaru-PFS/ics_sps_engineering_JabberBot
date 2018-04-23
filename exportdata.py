@@ -8,7 +8,7 @@ from os.path import basename
 
 import numpy as np
 from Crypto.Cipher import AES
-from ics_sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
+from sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 from matplotlib.dates import num2date
 
 colors = ['#1f78c5', '#ff801e', '#2ca13c', '#d82738', '#9568cf', '#8d565b', '#e578c3', '#17bfd1', '#808080',

@@ -1,14 +1,9 @@
 import logging
-import os
-import sys
 import threading
 import time
 from datetime import datetime as dt
 
 from mythread import pingXmpp
-
-absPath = os.getcwd() + '/' + sys.argv[0].split('main.py')[0]
-sys.path.insert(0, absPath.split('ics_sps_engineering_JabberBot')[0])
 
 from pfsbot import PfsBot
 
@@ -48,7 +43,7 @@ def runBot(args):
             time.sleep(2)
             if pingXmpp("xmpp.osupytheas.fr"):
                 logger.debug("Creating an instance of PfsBot")
-                bc = PfsBot(JID, PASSWORD, absPath, logFolder, addr, port, actorList)
+                bc = PfsBot(JID, PASSWORD, logFolder, addr, port, actorList)
                 th = threading.Thread(target=bc.thread_proc)
                 bc.serve_forever(connect_callback=lambda: th.start())
                 bc.thread_killed = True
@@ -67,7 +62,7 @@ def main():
     parser.add_argument('--ait', default=None, type=str, nargs='?', help='ait actors list')
     parser.add_argument('--host', default='localhost', type=str, nargs='?', help='database server ip address')
     parser.add_argument('--port', default='5432', type=int, nargs='?', help='database server port')
-    parser.add_argument('--logFolder', default='/home/pfs/AIT-PFS/jabberLog', type=str, nargs='?', help='log')
+    parser.add_argument('--logFolder', default='/software/jabberbot/logs', type=str, nargs='?', help='log')
 
     args = parser.parse_args()
 
