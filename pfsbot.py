@@ -23,13 +23,16 @@ import random
 import time
 import types
 from datetime import datetime as dt
+from datetime import timedelta
 
 import sps_engineering_Lib_dataQuery as dataQuery
 from sps_engineering_Lib_dataQuery.confighandler import loadConf, loadAlarm, readTimeout, readState, readMode, \
     writeTimeout, writeState, writeMode
 from sps_engineering_Lib_dataQuery.databasemanager import DatabaseManager
 
+from dataset import Dataset
 from myjabberbot import JabberBot, botcmd
+from report import Report
 
 
 class AlarmHandler(object):
@@ -215,7 +218,7 @@ class PfsBot(JabberBot):
 
         args = str(args)
         if len(args.split(' ')) != 2:
-           return 'Not enough arguments'
+            return 'Not enough arguments'
 
         device = args.split(' ')[0].strip().lower()
         command = args.split(' ')[1].strip().lower()
@@ -223,7 +226,7 @@ class PfsBot(JabberBot):
         timeoutAck = readTimeout()
 
         if command not in ['rearm', 'ack']:
-           return 'available args are rearm, ack'
+            return 'available args are rearm, ack'
 
         if command == 'rearm':
             timeoutAck.remove(device)
@@ -316,7 +319,7 @@ class PfsBot(JabberBot):
         for m in alarmMsg.split('\r\n'):
             self.log.debug(m)
 
-        alarmMsg += ("  by %s  on %s" %(str(mess.getFrom().getNode()), dt.now().isoformat()[:19]) if mess else '')
+        alarmMsg += ("  by %s  on %s" % (str(mess.getFrom().getNode()), dt.now().isoformat()[:19]) if mess else '')
 
         for jid in userAlarm.values():
             self.send(jid, alarmMsg)
@@ -383,68 +386,68 @@ class PfsBot(JabberBot):
         else:
             return False
 
+    def constructPlot(self, mess, args, tdelta):
+        user = mess.getFrom()
+        rep = Report(self, tdelta, user)
+        rep.start()
 
-            # def constructPlot(self, mess, args, tdelta):
-            #     user = mess.getFrom()
-            #     rep = Report(self, tdelta, user)
-            #     rep.start()
+    @botcmd
+    def plot(self, mess, args):
+        """send a pdf report to your email address
+           argument : duration in j,h or m
+           ex : plot 1j
+                plot 6h
+                """
+        knownUsers = self.unPickle("knownUsers")
 
-            # @botcmd
-            # def plot(self, mess, args):
-            #     """send a pdf report to your email address
-            #        argument : duration in j,h or m
-            #        ex : plot 1j
-            #             plot 6h
-            #             """
-            #     knownUsers = self.unPickle("knownUsers")
-            #
-            #     tdelta = None
-            #     user = mess.getFrom().getNode()
-            #     if user in knownUsers:
-            #         ok = False
-            #         fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes')]
-            #         for f, kwarg in fmt:
-            #             try:
-            #                 val = int(args.split(f)[0])
-            #                 d = {kwarg: val}
-            #                 tdelta = timedelta(**d)
-            #                 break
-            #             except ValueError:
-            #                 pass
-            #         if tdelta is not None:
-            #             self.constructPlot(mess, args, tdelta)
-            #             return "Generating the report ..."
-            #         else:
-            #             return "unknown argument"
-            #
-            #     else:
-            #         return "Do I know you ? Send me your email address by using the command record "
-            #
-            # @botcmd
-            # def dataset(self, mess, args):
-            #     """send a csv dataset to your email address
-            #        argument : date1(Y-m-d) date2(Y-m-d) sampling period (seconds)
-            #        ex : dataset 2017-09-01 2017-09-02 600
-            #             """
-            #     knownUsers = self.unPickle("knownUsers")
-            #
-            #     if len(args.split(' ')) == 3:
-            #         dstart = args.split(' ')[0].strip().lower()
-            #         dend = args.split(' ')[1].strip().lower()
-            #         step = float(args.split(' ')[2].strip().lower())
-            #     else:
-            #         return 'not enough arguments'
-            #
-            #     user = mess.getFrom().getNode()
-            #     if user in knownUsers:
-            #         dstart = dt.strptime(dstart, "%Y-%m-%d")
-            #         dend = dt.strptime(dend, "%Y-%m-%d")
-            #         dataset = Dataset(self, mess.getFrom(), dstart, dend, step)
-            #         dataset.start()
-            #         return "Generating the dataset ..."
-            #
-            #     else:
-            #         return "Do I know you ? Send me your email address by using the command record "
+        tdelta = None
+        user = mess.getFrom().getNode()
+        if user in knownUsers:
+
+            ok = False
+            fmt = [('j', 'days'), ('h', 'hours'), ('m', 'minutes'), ('d', 'days')]
+            for f, kwarg in fmt:
+                try:
+                    val = int(args.split(f)[0])
+                    d = {kwarg: val}
+                    tdelta = timedelta(**d)
+                    break
+                except ValueError:
+                    pass
+            if tdelta is not None:
+                self.constructPlot(mess, args, tdelta)
+                return "Generating the report ..."
+            else:
+                return "unknown argument"
+
+        else:
+            return "Do I know you ? Send me your email address by using the command record "
+
+    @botcmd
+    def dataset(self, mess, args):
+        """send a csv dataset to your email address
+           argument : date1(Y-m-d) date2(Y-m-d) sampling period (seconds)
+           ex : dataset 2017-09-01 2017-09-02 600
+                """
+        knownUsers = self.unPickle("knownUsers")
+
+        if len(args.split(' ')) == 3:
+            dstart = args.split(' ')[0].strip().lower()
+            dend = args.split(' ')[1].strip().lower()
+            step = float(args.split(' ')[2].strip().lower())
+        else:
+            return 'not enough arguments'
+
+        user = mess.getFrom().getNode()
+        if user in knownUsers:
+            dstart = dt.strptime(dstart, "%Y-%m-%d")
+            dend = dt.strptime(dend, "%Y-%m-%d")
+            dataset = Dataset(self, mess.getFrom(), dstart.isoformat(), dend.isoformat(), step)
+            dataset.start()
+            return "Generating the dataset ..."
+
+        else:
+            return "Do I know you ? Send me your email address by using the command record "
 
             # @botcmd(hidden=True)
             # def curious_guy(self, mess, args):
