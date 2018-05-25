@@ -89,6 +89,7 @@ class TimeoutHandler(object):
         return readTimeout()
 
     def ping(self, start=False):
+        ontimeout = []
         for device in self.devices:
             try:
                 df = self.pfsbot.db.last(table=device)
@@ -100,10 +101,13 @@ class TimeoutHandler(object):
                 self.last_time[device] = time.time()
                 self.last_date[device] = tai
             else:
-                self.checkDevice(table=device, tai=tai)
+                if self.checkDevice(table=device, tai=tai):
+                    ontimeout.append(device)
+
+        return ontimeout
 
     def checkDevice(self, table, tai):
-        tai = tai if tai else self.last_date[table]
+        ontimeout = False
 
         if tai != self.last_date[table]:
             self.last_time[table] = time.time()
@@ -112,7 +116,9 @@ class TimeoutHandler(object):
         else:
             if table not in self.timeout_ack and ((time.time() - self.last_time[table]) > TimeoutHandler.timelim):
                 self.pfsbot.sendAlarmMsg(alarmMsg="TIME OUT ON %s ! ! !" % table)
-
+                ontimeout = True
+        
+        return ontimeout
 
 class PfsBot(JabberBot):
     """This is a simple broadcasting client """
@@ -127,6 +133,7 @@ class PfsBot(JabberBot):
         self.db_port = port
         self.actorList = actorList
         self.thread_killed = False
+        self.ontimeout = []
 
         self.db = DatabaseManager(ip=addr, port=port)
         self.db.init()
@@ -223,16 +230,22 @@ class PfsBot(JabberBot):
         device = args.split(' ')[0].strip().lower()
         command = args.split(' ')[1].strip().lower()
 
-        timeoutAck = readTimeout()
-
         if command not in ['rearm', 'ack']:
             return 'available args are rearm, ack'
+        
+        if device=='all':
+            if command =='rearm':
+                timeoutAck = []
+            elif command =='ack':
+                timeoutAck = self.ontimeout
 
-        if command == 'rearm':
-            timeoutAck.remove(device)
+        else:
+            timeoutAck = readTimeout()
+            if command == 'rearm':
+                timeoutAck.remove(device)
 
-        elif command == 'ack':
-            timeoutAck.append(device)
+            elif command == 'ack':
+                timeoutAck.append(device)
 
         writeTimeout(timeoutAck)
         self.sendAlarmMsg(mess=mess, alarmMsg="Timeout %s  %s" % (device, command))
@@ -302,7 +315,7 @@ class PfsBot(JabberBot):
             self._idle_ping()
 
         if self.PING_FREQUENCY and time.time() - self.get_alert() > self.ALERT_FREQ:
-            self.timeoutHandler.ping()
+            self.ontimeout = self.timeoutHandler.ping()
             self.alarmHandler.checkValues()
 
             self._set_alert()
@@ -440,8 +453,16 @@ class PfsBot(JabberBot):
 
         user = mess.getFrom().getNode()
         if user in knownUsers:
-            dstart = dt.strptime(dstart, "%Y-%m-%d")
-            dend = dt.strptime(dend, "%Y-%m-%d")
+            try:
+                dstart = dt.strptime(dstart, "%Y-%m-%d")
+            except ValueError:
+                return "ValueError : time data '%s'" % dstart + " does not match format '%Y-%m-%d'"
+
+            try:
+                dend = dt.strptime(dend, "%Y-%m-%d")
+            except ValueError:
+                return "ValueError : time data '%s'" % dend + " does not match format '%Y-%m-%d'"
+
             dataset = Dataset(self, mess.getFrom(), dstart.isoformat(), dend.isoformat(), step)
             dataset.start()
             return "Generating the dataset ..."
