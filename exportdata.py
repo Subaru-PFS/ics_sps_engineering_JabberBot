@@ -33,9 +33,10 @@ def exportData(pfsbot, start, end=False):
     db.init()
 
     fullConfig = loadConf(date=start)
-    optional = {'r1': [getConf(fullConfig=fullConfig, tablename='aitroom__roughpressure', method='devname')],
-                'b1': []}
-
+    # optional = {'b1': [getConf(fullConfig=fullConfig, tablename='aitroom__roughpressure', method='devname')],
+    #             'r1': []}
+    optional = {'b1': [],
+                'r1': []}
     devices = []
 
     ionGauge = getConf(fullConfig=fullConfig, tablename='xcu_%s__pressure' % pfsbot.cam, method='devname')

@@ -22,6 +22,7 @@ import pickle
 import random
 import time
 import types
+from collections import OrderedDict
 from datetime import datetime as dt
 from datetime import timedelta
 
@@ -44,7 +45,7 @@ class AlarmHandler(object):
 
     @property
     def alarms(self):
-        return loadAlarm()
+        return self.pfsbot.loadAlarm()
 
     def checkValues(self):
         state = readState()
@@ -56,12 +57,14 @@ class AlarmHandler(object):
                 df = self.pfsbot.db.last(alarm.tablename, alarm.key)
                 val = df[alarm.key]
                 if not (float(alarm.lbound) <= val < float(alarm.ubound)):
-                    raise Warning("%s \n -= ALARM %s OUT OF RANGE =- \n %s <= %g < %s" % (df.strdate,
-                                                                                          alarm.label,
-                                                                                          alarm.lbound,
-                                                                                          val, alarm.ubound))
+                    raise Warning('OUT OF RANGE =- \n %s <= %g < %s' % (alarm.lbound,
+                                                                        val,
+                                                                        alarm.ubound))
+
             except Exception as e:
-                self.message[alarm.label.lower()] = str(e)
+                self.message[alarm.label.lower()] = '%s \n -= ALARM %s %s' % (dt.utcnow().isoformat()[:-10],
+                                                                              alarm.label,
+                                                                              str(e))
 
         for mess in self.message.values():
             self.pfsbot.sendAlarmMsg(alarmMsg=mess)
@@ -117,8 +120,9 @@ class TimeoutHandler(object):
             if table not in self.timeout_ack and ((time.time() - self.last_time[table]) > TimeoutHandler.timelim):
                 self.pfsbot.sendAlarmMsg(alarmMsg="TIME OUT ON %s ! ! !" % table)
                 ontimeout = True
-        
+
         return ontimeout
+
 
 class PfsBot(JabberBot):
     """This is a simple broadcasting client """
@@ -179,7 +183,6 @@ class PfsBot(JabberBot):
     # You can use the "hidden" parameter to hide the
     # command from JabberBot's 'help' list
 
-
     @botcmd
     def alarm_msg(self, mess, args):
         """Sends out a broadcast to users on ALARM, supply message as arguments (e.g. broadcast hello)"""
@@ -232,21 +235,22 @@ class PfsBot(JabberBot):
 
         if command not in ['rearm', 'ack']:
             return 'available args are rearm, ack'
-        
-        if device=='all':
-            if command =='rearm':
-                timeoutAck = []
-            elif command =='ack':
-                timeoutAck = self.ontimeout
 
+        timeoutAck = readTimeout()
+
+        if device == 'all':
+            allDevices = self.timeoutHandler.devices
+            if command == 'rearm':
+                timeoutAck = [timeout for timeout in timeoutAck if timeout not in allDevices]
+            elif command == 'ack':
+                timeoutAck += self.ontimeout
         else:
-            timeoutAck = readTimeout()
             if command == 'rearm':
                 timeoutAck.remove(device)
-
             elif command == 'ack':
                 timeoutAck.append(device)
 
+        timeoutAck = list(OrderedDict.fromkeys(timeoutAck))
         writeTimeout(timeoutAck)
         self.sendAlarmMsg(mess=mess, alarmMsg="Timeout %s  %s" % (device, command))
 
@@ -348,6 +352,10 @@ class PfsBot(JabberBot):
         devConf = loadConf()
         return [device for device in devConf if self.isRelevant(device.tablename)]
 
+    def loadAlarm(self):
+        alarmConf = loadAlarm()
+        return [device for device in alarmConf if self.isRelevant(device.tablename)]
+
     def bindFunction(self, device):
         @botcmd
         def func1(self, mess=None, args=None):
@@ -394,10 +402,7 @@ class PfsBot(JabberBot):
 
     def isRelevant(self, tableName):
         actor = tableName.split('__')[0]
-        if actor in self.actorList:
-            return True
-        else:
-            return False
+        return actor in self.actorList
 
     def constructPlot(self, mess, args, tdelta):
         user = mess.getFrom()
