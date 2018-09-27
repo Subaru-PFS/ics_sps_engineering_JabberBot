@@ -42,6 +42,8 @@ except ImportError:
     """
     sys.exit(-1)
 
+import qotd
+import random
 import time
 import inspect
 import logging
@@ -649,37 +651,43 @@ class JabberBot(object):
         """   Returns a help string listing available options.
 
         Automatically assigned to the "help" command."""
-        if not args:
-            if self.__doc__:
-                description = self.__doc__.strip()
-            else:
-                description = 'Available commands:'
 
-            usage = '\n'.join(sorted([
-                                         '%s: %s' % (name, (command.__doc__ or \
-                                                            '(undocumented)').strip().split('\n', 1)[0])
-                                         for (name, command) in self.commands.iteritems() \
-                                         if name != (self.__command_prefix + 'help') \
-                                         and not command._jabberbot_command_hidden
-                                         ]))
-            usage = '\n\n' + '\n\n'.join(filter(None,
-                                                [usage, self.MSG_HELP_TAIL % {'helpcommand':
-                                                                                  self.__command_prefix + 'help'}]))
+        if random.randint(0,10):
+            if not args:
+                if self.__doc__:
+                    description = self.__doc__.strip()
+                else:
+                    description = 'Available commands:'
+
+                usage = '\n'.join(sorted([
+                                             '%s: %s' % (name, (command.__doc__ or \
+                                                                '(undocumented)').strip().split('\n', 1)[0])
+                                             for (name, command) in self.commands.iteritems() \
+                                             if name != (self.__command_prefix + 'help') \
+                                             and not command._jabberbot_command_hidden
+                                             ]))
+                usage = '\n\n' + '\n\n'.join(filter(None,
+                                                    [usage, self.MSG_HELP_TAIL % {'helpcommand':
+                                                                                      self.__command_prefix + 'help'}]))
+            else:
+                description = ''
+                if (args not in self.commands and
+                            (self.__command_prefix + args) in self.commands):
+                    # Automatically add prefix if it's missing
+                    args = self.__command_prefix + args
+                if args in self.commands:
+                    usage = (self.commands[args].__doc__ or \
+                             'undocumented').strip()
+                else:
+                    usage = self.MSG_HELP_UNDEFINED_COMMAND
+
+            top = self.top_of_help_message()
+            bottom = self.bottom_of_help_message()
+            return ''.join(filter(None, [top, description, usage, bottom]))
+
         else:
-            description = ''
-            if (args not in self.commands and
-                        (self.__command_prefix + args) in self.commands):
-                # Automatically add prefix if it's missing
-                args = self.__command_prefix + args
-            if args in self.commands:
-                usage = (self.commands[args].__doc__ or \
-                         'undocumented').strip()
-            else:
-                usage = self.MSG_HELP_UNDEFINED_COMMAND
-
-        top = self.top_of_help_message()
-        bottom = self.bottom_of_help_message()
-        return ''.join(filter(None, [top, description, usage, bottom]))
+            msg = qotd.main().format()
+            return '%s \n Does it helps ?'%msg
 
     def idle_proc(self):
         """This function will be called in the main loop."""

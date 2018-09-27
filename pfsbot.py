@@ -207,7 +207,9 @@ class PfsBot(JabberBot):
             device = '%s-%s' % (device, self.cam)
 
         if device not in alarmState.iterkeys():
-            return '%s is not a valid device (%s)' % (device, ','.join(alarmState.iterkeys()))
+            existingAlarms = list(alarmState.iterkeys())
+            existingAlarms.sort()
+            return '%s is not a valid device (%s)' % (device, ','.join(existingAlarms))
 
         if command not in ['on', 'off', 'ack']:
             return '%s is not a valid argument (on, off, ack)' % command
@@ -243,6 +245,7 @@ class PfsBot(JabberBot):
             return 'available args are rearm, ack'
 
         timeoutAck = readTimeout()
+        timeoutAck.sort()
 
         if device == 'all':
             allDevices = self.timeoutHandler.devices
@@ -353,7 +356,7 @@ class PfsBot(JabberBot):
     def updateJID(self, jid):
         userAlarm = self.unPickle("userAlarm")
         user = jid.getNode()
-        self.log.info('updating jid : %s for user %s'%(jid, user))
+        self.log.info('updating jid : %s for user %s' % (jid, user))
         if user in userAlarm.iterkeys() and userAlarm[user] != jid:
             userAlarm[user] = jid
             self.doPickle('userAlarm', userAlarm)
