@@ -191,18 +191,13 @@ class PfsBot(JabberBot):
     @botcmd
     def alarm(self, mess, args):
         """alarm deviceName ack|off|on """
-        args = str(args)
-        alarmState = readState()
-
-        if len(args.split(' ')) != 2:
+        args = [arg.strip().lower() for arg in str(args).strip().split(' ') if arg]
+        if len(args) != 2:
             return 'not enough arguments'
 
-        device = args.split(' ')[0].strip().lower()
-        command = args.split(' ')[1].strip().lower()
+        device, command = (args[0], args[1]) if args[1] in ['on', 'off', 'ack'] else (args[1], args[0])
 
-        if device in ['on', 'off', 'ack']:
-            device, command = command, device
-
+        alarmState = readState()
         if '%s-%s' % (device, self.cam) in alarmState.iterkeys():
             device = '%s-%s' % (device, self.cam)
 
@@ -230,16 +225,11 @@ class PfsBot(JabberBot):
     @botcmd
     def timeout(self, mess, args):
         """timeout deviceName|all ack|rearm """
+        args = [arg.strip().lower() for arg in str(args).strip().split(' ') if arg]
+        if len(args) != 2:
+            return 'not enough arguments'
 
-        args = str(args)
-        if len(args.split(' ')) != 2:
-            return 'Not enough arguments'
-
-        device = args.split(' ')[0].strip().lower()
-        command = args.split(' ')[1].strip().lower()
-
-        if device in ['rearm', 'ack']:
-            device, command = command, device
+        device, command = (args[0], args[1]) if args[1] in ['rearm', 'ack'] else (args[1], args[0])
 
         if command not in ['rearm', 'ack']:
             return 'available args are rearm, ack'
