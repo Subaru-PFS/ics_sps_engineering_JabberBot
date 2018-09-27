@@ -168,7 +168,7 @@ class PfsBot(JabberBot):
                     userAlarm[user] = mess.getFrom()
                     msg = "You are on Alarm MODE !"
                 else:
-                    msg = "Stop harassing me please !"
+                    msg = "You already are on Alarm mode \n Stop wasting my time please !"
             else:
                 if user in userAlarm.iterkeys():
                     userAlarm.pop(user, None)
@@ -190,7 +190,7 @@ class PfsBot(JabberBot):
 
     @botcmd
     def alarm(self, mess, args):
-        """alarm pressure|turbo|gatevalve|cooler  ack|off|on """
+        """alarm deviceName ack|off|on """
         args = str(args)
         alarmState = readState()
 
@@ -200,14 +200,17 @@ class PfsBot(JabberBot):
         device = args.split(' ')[0].strip().lower()
         command = args.split(' ')[1].strip().lower()
 
-        if device not in alarmState.iterkeys():
+        if device in ['on', 'off', 'ack']:
+            device, command = command, device
+
+        if '%s-%s' % (device, self.cam) in alarmState.iterkeys():
             device = '%s-%s' % (device, self.cam)
 
         if device not in alarmState.iterkeys():
-            return 'unknown device'
+            return '%s is not a valid device (%s)' % (device, ','.join(alarmState.iterkeys()))
 
         if command not in ['on', 'off', 'ack']:
-            return 'unknown argument'
+            return '%s is not a valid argument (on, off, ack)' % command
 
         if command == 'on':
             alarmState[device] = True
@@ -224,7 +227,7 @@ class PfsBot(JabberBot):
 
     @botcmd
     def timeout(self, mess, args):
-        """timeout device ack|rearm """
+        """timeout deviceName|all ack|rearm """
 
         args = str(args)
         if len(args.split(' ')) != 2:
@@ -232,6 +235,9 @@ class PfsBot(JabberBot):
 
         device = args.split(' ')[0].strip().lower()
         command = args.split(' ')[1].strip().lower()
+
+        if device in ['rearm', 'ack']:
+            device, command = command, device
 
         if command not in ['rearm', 'ack']:
             return 'available args are rearm, ack'
@@ -246,7 +252,10 @@ class PfsBot(JabberBot):
                 timeoutAck += self.ontimeout
         else:
             if command == 'rearm':
-                timeoutAck.remove(device)
+                if device in timeoutAck:
+                    timeoutAck.remove(device)
+                else:
+                    return '%s not in timeoutAck : %s' % (device, ','.join(timeoutAck))
             elif command == 'ack':
                 timeoutAck.append(device)
 
@@ -344,6 +353,7 @@ class PfsBot(JabberBot):
     def updateJID(self, jid):
         userAlarm = self.unPickle("userAlarm")
         user = jid.getNode()
+        self.log.info('updating jid : %s for user %s'%(jid, user))
         if user in userAlarm.iterkeys() and userAlarm[user] != jid:
             userAlarm[user] = jid
             self.doPickle('userAlarm', userAlarm)
@@ -474,14 +484,3 @@ class PfsBot(JabberBot):
 
         else:
             return "Do I know you ? Send me your email address by using the command record "
-
-            # @botcmd(hidden=True)
-            # def curious_guy(self, mess, args):
-            #     """WHO Suscribe to the alarm"""
-            #     userAlarm = self.unPickle("userAlarm")
-            #     listAlarm = self.unPickle("listAlarm", path='%s/alarm/' % self.config_path)
-            #     timeoutAck = self.unPickle("timeoutAck", path='%s/alarm/' % self.config_path, empty="list")
-            #
-            #     return "%s\n %s\n %s\n" % (str([jid for jid in userAlarm.iterkeys()]),
-            #                                str(listAlarm),
-            #                                str(timeoutAck))
