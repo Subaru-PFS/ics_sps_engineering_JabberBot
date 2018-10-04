@@ -22,6 +22,7 @@ import pickle
 import random
 import time
 import types
+import numpy as np
 from collections import OrderedDict
 from datetime import datetime as dt
 from datetime import timedelta
@@ -41,6 +42,7 @@ class AlarmHandler(object):
 
     def __init__(self, pfsbot):
         self.message = {}
+        self.nanCounts = {}
         self.pfsbot = pfsbot
 
     @property
@@ -56,6 +58,9 @@ class AlarmHandler(object):
             try:
                 df = self.pfsbot.db.last(alarm.tablename, alarm.key)
                 val = df[alarm.key]
+                if self.increaseNanCount(isNan=np.isnan(val), key='%s--%s' % (alarm.tablename, alarm.key)):
+                    continue
+
                 if not (float(alarm.lbound) <= val < float(alarm.ubound)):
                     raise Warning('OUT OF RANGE =- \n %s <= %g < %s' % (alarm.lbound,
                                                                         val,
@@ -71,6 +76,22 @@ class AlarmHandler(object):
 
     def clear(self, key):
         self.message.pop(key, None)
+
+    def increaseNanCount(self, isNan, key):
+        count = 1 if isNan else 0
+
+        try:
+            if isNan:
+                self.nanCounts[key] += 1
+                if self.nanCounts[key] >= 3:
+                    raise Warning("TIME OUT ON %s ! ! !" % key)
+
+            else:
+                self.nanCounts[key] = 0
+        except KeyError:
+            self.nanCounts[key] = count
+
+        return isNan
 
 
 class TimeoutHandler(object):
