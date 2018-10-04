@@ -224,32 +224,32 @@ class PfsBot(JabberBot):
 
     @botcmd
     def timeout(self, mess, args):
-        """timeout deviceName|all ack|rearm """
+        """timeout deviceName|all off|on """
         args = [arg.strip().lower() for arg in str(args).strip().split(' ') if arg]
         if len(args) != 2:
             return 'not enough arguments'
 
-        device, command = (args[0], args[1]) if args[1] in ['rearm', 'ack'] else (args[1], args[0])
+        device, command = (args[0], args[1]) if args[1] in ['on', 'off'] else (args[1], args[0])
 
-        if command not in ['rearm', 'ack']:
-            return 'available args are rearm, ack'
+        if command not in ['on', 'off']:
+            return 'available args are on, off'
 
         timeoutAck = readTimeout()
         timeoutAck.sort()
 
         if device == 'all':
             allDevices = self.timeoutHandler.devices
-            if command == 'rearm':
+            if command == 'on':
                 timeoutAck = [timeout for timeout in timeoutAck if timeout not in allDevices]
-            elif command == 'ack':
+            elif command == 'off':
                 timeoutAck += self.ontimeout
         else:
-            if command == 'rearm':
+            if command == 'on':
                 if device in timeoutAck:
                     timeoutAck.remove(device)
                 else:
                     return '%s not in timeoutAck : %s' % (device, ','.join(timeoutAck))
-            elif command == 'ack':
+            elif command == 'off':
                 timeoutAck.append(device)
 
         timeoutAck = list(OrderedDict.fromkeys(timeoutAck))
