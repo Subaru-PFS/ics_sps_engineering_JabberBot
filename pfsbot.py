@@ -150,17 +150,18 @@ class PfsBot(JabberBot):
     TIMEOUT_LIM = 90
     ALERT_FREQ = 60
 
-    def __init__(self, jid, password, logFolder, addr, port, actorList):
+    def __init__(self, jid, password, logFolder, actorList, dbHost, dbPort, dbPass):
         self.log = logging.getLogger('JabberBot.PfsBot')
 
         self.logFolder = logFolder
-        self.db_addr = addr
-        self.db_port = port
+        self.dbHost = dbHost
+        self.dbPort = dbPort
+        self.dbPass  = dbPass
         self.actorList = actorList
         self.thread_killed = False
         self.ontimeout = []
 
-        self.db = DatabaseManager(ip=addr, port=port)
+        self.db = DatabaseManager(ip=dbHost, port=dbPort, password=dbPass)
         self.db.init()
 
         self.functionList = self.loadConfig()

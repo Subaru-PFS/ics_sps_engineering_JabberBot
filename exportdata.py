@@ -29,7 +29,7 @@ def getConf(fullConfig, tablename, method='both'):
 
 def exportData(pfsbot, start, end=False):
 
-    db = DatabaseManager(pfsbot.db_addr, pfsbot.db_port)
+    db = DatabaseManager(pfsbot.dbHost, pfsbot.dbPort, pfsbot.dbPass)
     db.init()
 
     fullConfig = loadConf(date=start)

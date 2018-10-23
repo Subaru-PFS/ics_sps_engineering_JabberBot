@@ -4,15 +4,12 @@ import time
 from datetime import datetime as dt
 
 from mythread import pingXmpp
-
 from pfsbot import PfsBot
 
 
 def runBot(args):
     cam = args.cam
     actorList = args.ait.split(',')
-    addr = args.host
-    port = args.port
     logFolder = args.logFolder
 
     # create logger with 'spam_application'
@@ -43,7 +40,8 @@ def runBot(args):
             time.sleep(2)
             if pingXmpp("xmpp.osupytheas.fr"):
                 logger.debug("Creating an instance of PfsBot")
-                bc = PfsBot(JID, PASSWORD, logFolder, addr, port, actorList)
+                bc = PfsBot(JID, PASSWORD, logFolder, actorList,
+                            dbHost=args.host, dbPort=args.port, dbPass=args.password)
                 th = threading.Thread(target=bc.thread_proc)
                 bc.serve_forever(connect_callback=lambda: th.start())
                 bc.thread_killed = True
@@ -52,7 +50,7 @@ def runBot(args):
                 logger.debug("Failed to ping xmpp.osupytheas.fr")
                 time.sleep(10)
     except KeyboardInterrupt:
-        print 'interrupted!'
+        print('interrupted!')
 
 
 def main():
@@ -62,6 +60,7 @@ def main():
     parser.add_argument('--ait', default=None, type=str, nargs='?', help='ait actors list')
     parser.add_argument('--host', default='localhost', type=str, nargs='?', help='database server ip address')
     parser.add_argument('--port', default='5432', type=int, nargs='?', help='database server port')
+    parser.add_argument('--password', default='', type=str, nargs='?', help='database server password')
     parser.add_argument('--logFolder', default='/software/jabberbot/logs', type=str, nargs='?', help='log')
 
     args = parser.parse_args()
