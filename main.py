@@ -61,7 +61,7 @@ def main():
     parser.add_argument('--host', default='localhost', type=str, nargs='?', help='database server ip address')
     parser.add_argument('--port', default='5432', type=int, nargs='?', help='database server port')
     parser.add_argument('--password', default='', type=str, nargs='?', help='database server password')
-    parser.add_argument('--logFolder', default='/software/jabberbot/logs', type=str, nargs='?', help='log')
+    parser.add_argument('--logFolder', default='/software/ait/logs/jabberbot', type=str, nargs='?', help='log')
 
     args = parser.parse_args()
 

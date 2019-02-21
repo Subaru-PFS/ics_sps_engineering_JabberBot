@@ -104,7 +104,7 @@ def send_file(send_to, myfile, subject):
     text = 'This email has been generated for PFS AIT'
     server = "smtp.osupytheas.fr"
     port = 587
-    with open('/home/pfs/AIT-PFS/current/word.txt', 'r') as thisFile:
+    with open('/software/ait/logs/jabberbot/word.txt', 'r') as thisFile:
         unpickler = pickle.Unpickler(thisFile)
         pf1, pf2 = unpickler.load()
 

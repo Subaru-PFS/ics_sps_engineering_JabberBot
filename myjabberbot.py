@@ -31,8 +31,10 @@ bot's operation completely. MUCs are also supported.
 import os
 import re
 import sys
-import thread
 import traceback as tb
+
+import thread
+
 try:
     import xmpp
 except ImportError:
@@ -142,7 +144,7 @@ class JabberBot(object):
         self.__seen = {}
         self.__threads = {}
         self.__lastping = time.time()
-        self.__lastawake  = time.time()
+        self.__lastawake = time.time()
         self.__lastalert = time.time()
         self.__privatedomain = privatedomain
         self.__acceptownmsgs = acceptownmsgs
@@ -652,7 +654,7 @@ class JabberBot(object):
 
         Automatically assigned to the "help" command."""
 
-        if random.randint(0,10):
+        if random.randint(0, 10):
             if not args:
                 if self.__doc__:
                     description = self.__doc__.strip()
@@ -686,8 +688,8 @@ class JabberBot(object):
             return ''.join(filter(None, [top, description, usage, bottom]))
 
         else:
-            msg = qotd.main().format()
-            return '%s \n Does it helps ?'%msg
+            msg = str(random.choice(qotd.update_quotes_cache()))
+            return '%s \n Does it helps ?' % msg
 
     def idle_proc(self):
         """This function will be called in the main loop."""
