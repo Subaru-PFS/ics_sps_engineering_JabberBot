@@ -1,7 +1,3 @@
-if (type == exact) {
-   setupRequired(ics_sps_engineering_Lib_dataQuery -j 1.1.1)
-} else {
-   setupRequired(ics_sps_engineering_Lib_dataQuery 1.1.1 [>= 1.1.1])
-}
+setupRequired(ics_sps_engineering_Lib_dataQuery -j 1.1.2)
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)

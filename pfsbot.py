@@ -22,11 +22,11 @@ import pickle
 import random
 import time
 import types
-import numpy as np
 from collections import OrderedDict
 from datetime import datetime as dt
 from datetime import timedelta
 
+import numpy as np
 import sps_engineering_Lib_dataQuery as dataQuery
 from sps_engineering_Lib_dataQuery.confighandler import loadConf, loadAlarm, readTimeout, readState, readMode, \
     writeTimeout, writeState, writeMode
@@ -156,7 +156,7 @@ class PfsBot(JabberBot):
         self.logFolder = logFolder
         self.dbHost = dbHost
         self.dbPort = dbPort
-        self.dbPass  = dbPass
+        self.dbPass = dbPass
         self.actorList = actorList
         self.thread_killed = False
         self.ontimeout = []
@@ -209,6 +209,25 @@ class PfsBot(JabberBot):
     def alarm_msg(self, mess, args):
         """Sends out a broadcast to users on ALARM, supply message as arguments (e.g. broadcast hello)"""
         self.sendAlarmMsg(mess=mess, alarmMsg='broadcast: %s' % args)
+
+    @botcmd
+    def alarm_info(self, mess, args):
+        """list and states of devices that can be set in alarm"""
+        states = readState()
+        ret = ['%s < %s < %s   %s' % (alarm.lbound,
+                                      alarm.label.lower(),
+                                      alarm.ubound,
+                                      'ON' if states[alarm.label.lower()] else 'OFF') for alarm in self.loadAlarm()]
+
+        return '\n'.join(ret)
+
+    @botcmd
+    def timeout_info(self, mess, args):
+        """list and states of devices that can be set in alarm"""
+        timeout = readTimeout()
+        ret = ['%s   %s' % (device, 'ACK' if device in timeout else 'ON') for device in self.timeoutHandler.devices]
+
+        return '\n'.join(ret)
 
     @botcmd
     def alarm(self, mess, args):
