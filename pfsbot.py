@@ -219,15 +219,15 @@ class PfsBot(JabberBot):
                                       alarm.ubound,
                                       'ON' if states[alarm.label.lower()] else 'OFF') for alarm in self.loadAlarm()]
 
-        return '\n'.join(ret)
+        return '\n' + '\n'.join(ret)
 
     @botcmd
     def timeout_info(self, mess, args):
-        """list and states of devices that can be set in alarm"""
+        """list and states of timeout """
         timeout = readTimeout()
         ret = ['%s   %s' % (device, 'ACK' if device in timeout else 'ON') for device in self.timeoutHandler.devices]
 
-        return '\n'.join(ret)
+        return '\n' + '\n'.join(ret)
 
     @botcmd
     def alarm(self, mess, args):
