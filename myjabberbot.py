@@ -540,7 +540,7 @@ class JabberBot(object):
         type = mess.getType()
         jid = mess.getFrom()
         props = mess.getProperties()
-        text = mess.getBody()
+        text = mess.getBody().strip()
         username = self.get_sender_username(mess)
 
         if type not in ("groupchat", "chat"):
