@@ -28,21 +28,24 @@ from labels import STSlabels, alertsFromMode
 from myjabberbot import JabberBot, botcmd
 
 
-def loadAlarmState():
+def loadAlarmState(oldModes):
     def camMode():
         modes = readMode()
         return dict([(n.split('xcu_')[1], m) for n, m in modes.items() if 'xcu_' in n])
 
     modes = camMode()
     states = readState()
-    for cam, mode in modes.items():
-        alerts = alertsFromMode[mode]
-        dataIds = dict([(v, k) for k, v in STSlabels.items()])
-        for alert, state in alerts:
-            dataId = dataIds['%s-%s' % (cam.upper(), alert)]
-            states[dataId] = state
 
-    return states
+    for cam, mode in modes.items():
+        if mode != oldModes[cam]:
+            alerts = alertsFromMode[mode]
+            dataIds = dict([(v, k) for k, v in STSlabels.items()])
+            for alert, state in alerts:
+                dataId = dataIds['%s-%s' % (cam.upper(), alert)]
+                states[dataId] = state
+
+    writeState(states)
+    return modes, states
 
 
 class AlertsBot(JabberBot):
@@ -58,6 +61,7 @@ class AlertsBot(JabberBot):
         JabberBot.__init__(self, jid, password)
 
         self._getCommand()
+        self.modes, __ = loadAlarmState(oldModes=dict(b1=None, r1=None))
 
     @botcmd
     def alert_mode(self, mess, args):
@@ -177,7 +181,11 @@ class AlertsBot(JabberBot):
             for alert in alerts:
                 states[alert] = bool
         else:
-            dataId = int(dataId)
+            try:
+                dataId = int(dataId)
+            except ValueError:
+                return 'invalid STS dataID'
+
             if dataId in STSlabels.keys():
                 states[dataId] = True if command == 'on' else False
             else:
@@ -206,7 +214,7 @@ class AlertsBot(JabberBot):
     def checkAlerts(self, doSend=True):
         datums = self.unPickle('/software/ait/alarm/datum.pickle')
         self.doPickle('/software/ait/alarm/datum.pickle', [])
-        states = loadAlarmState()
+        self.modes, states = loadAlarmState(oldModes=self.modes)
         alerts = []
         for datum in datums:
             try:
