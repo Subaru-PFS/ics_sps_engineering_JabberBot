@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import numpy as np
 import os
 import pickle
 import random
@@ -26,7 +27,6 @@ from collections import OrderedDict
 from datetime import datetime as dt
 from datetime import timedelta
 
-import numpy as np
 import sps_engineering_Lib_dataQuery as dataQuery
 from sps_engineering_Lib_dataQuery.confighandler import loadConf, loadAlarm, readTimeout, readState, readMode, \
     writeTimeout, writeState, writeMode
