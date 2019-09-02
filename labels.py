@@ -1,7 +1,14 @@
 STSlabels = {-1: 'all',
              1108: 'aten-voltage',
              1109: 'aten-current',
-             1110: 'aten-power'}
+             1110: 'aten-power',
+             2010: 'tests-val1',
+             2011: 'tests-val2',
+             2012: 'tests-val3',
+             2013: 'tests-val4',
+             2014: 'tests-val5',
+             2015: 'tests-val6'
+             }
 
 xcuLabels = ['cooler-status',
              'cooler-setpoint',
@@ -39,7 +46,7 @@ enuLabels = ['MOTOR_RDA',
              'FIBER_UNIT_HEXAPOD_TOP',
              'FIBER_UNIT_FIBER_FRAME_TOP',
              'COLLIMATOR_FRAME_BENCH_LEVEL',
-             'COLLIMATOR_FRAME_TOP'
+             'COLLIMATOR_FRAME_TOP',
              'BENCH_LEFT_TOP',
              'BENCH_LEFT_BOTTOM',
              'BENCH_RIGHT_TOP',

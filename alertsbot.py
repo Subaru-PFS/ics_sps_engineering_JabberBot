@@ -51,7 +51,8 @@ def loadAlarmState(oldModes):
 class AlertsBot(JabberBot):
     """This is a simple broadcasting client """
     TIMEOUT_LIM = 90
-    ALERT_FREQ = 60
+    ALERT_FREQ = 30
+    TIMEOUT_FREQ = 60
 
     def __init__(self, jid, password):
         self.datums = {}
@@ -202,23 +203,26 @@ class AlertsBot(JabberBot):
 
         if self.PING_FREQUENCY and time.time() - self.get_alert() > self.ALERT_FREQ:
             self._set_alert()
+            self.checkAlerts()
+
+        if self.PING_FREQUENCY and time.time() - self.get_timeout() > self.TIMEOUT_FREQ:
+            self._set_timeout()
             self.checkTimeout()
 
-        if self.PING_FREQUENCY and time.time() - self.get_awake() > self.PING_FREQUENCY / 2:
+        if self.PING_FREQUENCY and time.time() - self.get_awake() > 5:
             self._send_status()
-            self.checkAlerts()
 
     def thread_proc(self):
         pass
 
     def checkAlerts(self, doSend=True):
-        datums = self.unPickle('/software/ait/alarm/datum.pickle')
-        self.doPickle('/software/ait/alarm/datum.pickle', [])
+        datums = self.loadDatums()
         self.modes, states = loadAlarmState(oldModes=self.modes)
+
         alerts = []
         for datum in datums:
             try:
-                value, status = self.handleDatum(datum)
+                value, status = datum.value
             except ValueError:
                 continue
 
@@ -247,10 +251,6 @@ class AlertsBot(JabberBot):
                                                                                        delta))
         return timeout
 
-    def handleDatum(self, datum):
-        self.datums[datum.id] = datum
-        return datum.value
-
     def sendAlertMsg(self, mess=False, alertMsg=''):
         userAlert = self.unPickle("userAlarm")
 
@@ -269,6 +269,15 @@ class AlertsBot(JabberBot):
         if user in userAlert.iterkeys() and userAlert[user] != jid:
             userAlert[user] = jid
             self.doPickle('userAlert', userAlert)
+
+    def loadDatums(self):
+        datums = self.unPickle('/software/ait/alarm/datum.pickle')
+        self.doPickle('/software/ait/alarm/datum.pickle', [])
+
+        for datum in datums:
+            self.datums[datum.id] = datum
+
+        return [self.datums[datum.id] for datum in datums]
 
     def unPickle(self, filepath):
         try:
