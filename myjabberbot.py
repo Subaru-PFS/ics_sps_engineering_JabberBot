@@ -146,6 +146,7 @@ class JabberBot(object):
         self.__lastping = time.time()
         self.__lastawake = time.time()
         self.__lastalert = time.time()
+        self.__lasttimeout = time.time()
         self.__privatedomain = privatedomain
         self.__acceptownmsgs = acceptownmsgs
         self.__command_prefix = command_prefix
@@ -662,19 +663,19 @@ class JabberBot(object):
                     description = 'Available commands:'
 
                 usage = '\n'.join(sorted([
-                                             '%s: %s' % (name, (command.__doc__ or \
-                                                                '(undocumented)').strip().split('\n', 1)[0])
-                                             for (name, command) in self.commands.iteritems() \
-                                             if name != (self.__command_prefix + 'help') \
-                                             and not command._jabberbot_command_hidden
-                                             ]))
+                    '%s: %s' % (name, (command.__doc__ or \
+                                       '(undocumented)').strip().split('\n', 1)[0])
+                    for (name, command) in self.commands.iteritems() \
+                    if name != (self.__command_prefix + 'help') \
+                    and not command._jabberbot_command_hidden
+                ]))
                 usage = '\n\n' + '\n\n'.join(filter(None,
                                                     [usage, self.MSG_HELP_TAIL % {'helpcommand':
                                                                                       self.__command_prefix + 'help'}]))
             else:
                 description = ''
                 if (args not in self.commands and
-                            (self.__command_prefix + args) in self.commands):
+                        (self.__command_prefix + args) in self.commands):
                     # Automatically add prefix if it's missing
                     args = self.__command_prefix + args
                 if args in self.commands:
@@ -770,8 +771,14 @@ class JabberBot(object):
     def get_alert(self):
         return self.__lastalert
 
+    def get_timeout(self):
+        return self.__lasttimeout
+
     def _set_alert(self):
         self.__lastalert = time.time()
+
+    def _set_timeout(self):
+        self.__lasttimeout = time.time()
 
     def formatException(self, e):
         """ Format the caught exception as a string
