@@ -22,35 +22,14 @@ import random
 import time
 from datetime import datetime as dt
 
-from sps_engineering_Lib_dataQuery.confighandler import readTimeout, writeTimeout, readState, writeState, readMode
+from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
 
-from labels import STSlabels, alertsFromMode
 from myjabberbot import JabberBot, botcmd
-
-
-def loadAlarmState(oldModes):
-    def camMode():
-        modes = readMode()
-        return dict([(n.split('xcu_')[1], m) for n, m in modes.items() if 'xcu_' in n])
-
-    modes = camMode()
-    states = readState()
-
-    for cam, mode in modes.items():
-        if mode != oldModes[cam]:
-            alerts = alertsFromMode[mode]
-            dataIds = dict([(v, k) for k, v in STSlabels.items()])
-            for alert, state in alerts:
-                dataId = dataIds['%s-%s' % (cam.upper(), alert)]
-                states[dataId] = state
-
-    writeState(states)
-    return modes, states
 
 
 class AlertsBot(JabberBot):
     """This is a simple broadcasting client """
-    TIMEOUT_LIM = 90
+    TIMEOUT_LIM = 150
     ALERT_FREQ = 30
     TIMEOUT_FREQ = 60
 
@@ -62,7 +41,6 @@ class AlertsBot(JabberBot):
         JabberBot.__init__(self, jid, password)
 
         self._getCommand()
-        self.modes, __ = loadAlarmState(oldModes=dict(b1=None, r1=None))
 
     @botcmd
     def alert_mode(self, mess, args):
@@ -102,59 +80,14 @@ class AlertsBot(JabberBot):
         self.shutdown()
 
     @botcmd
-    def timeout_info(self, mess, args):
-        """list and states of timeout """
-        timeoutAck = readTimeout()
-        timeoutAck = [t for t in timeoutAck if isinstance(t, int)]
-
-        ret = ['%d:%s   %s' % (dataId, STSlabels[dataId], 'ACK') for dataId in timeoutAck]
-
-        return '\n' + '\n'.join(ret)
-
-    @botcmd
     def alerts_info(self, mess, args):
         """list and states of devices that can be set in alert"""
         states = readState()
         states = dict([(k, v) for k, v in states.items() if isinstance(k, int)])
 
-        ret = ['%d:%s   %s' % (dataId, STSlabels[dataId], bool) for dataId, bool in states.items()]
+        ret = [' dataId : %d = %s' % (dataId, bool) for dataId, bool in states.items()]
 
         return '\n' + '\n'.join(ret)
-
-    @botcmd
-    def timeout(self, mess, args):
-        """timeout deviceName|all off|on """
-        args = [arg.strip().lower() for arg in str(args).strip().split(' ') if arg]
-        if len(args) != 2:
-            return 'not enough arguments'
-
-        dataId, command = (args[0], args[1]) if args[1] in ['on', 'off'] else (args[1], args[0])
-
-        if command not in ['on', 'off']:
-            return 'available args are on, off'
-
-        timeoutAck = readTimeout()
-
-        if dataId == 'all':
-            dataId = -1
-            if command == 'on':
-                timeoutAck = [s for s in timeoutAck if not isinstance(s, int)]
-            else:
-                timeoutAck.extend(self.checkTimeout(doSend=False))
-        else:
-            dataId = int(dataId)
-            if command == 'on':
-                if dataId in timeoutAck:
-                    timeoutAck.remove(dataId)
-                else:
-                    return '%d not in timeoutAck' % dataId
-            else:
-                timeoutAck.append(dataId)
-
-        writeTimeout(list(set(timeoutAck)))
-        self.sendAlertMsg(mess=mess, alertMsg="Timeout %d:%s  %s" % (dataId, STSlabels[dataId], command))
-
-        return ''
 
     @botcmd
     def alerts(self, mess, args):
@@ -175,9 +108,12 @@ class AlertsBot(JabberBot):
             if command == 'on':
                 alerts = [k for k in states.keys() if isinstance(k, int)]
                 bool = True
-            else:
+            elif command == 'off':
                 alerts = self.checkAlerts(doSend=False)
                 bool = False
+            else:
+                alerts = []
+                self.datums = {}
 
             for alert in alerts:
                 states[alert] = bool
@@ -187,13 +123,18 @@ class AlertsBot(JabberBot):
             except ValueError:
                 return 'invalid STS dataID'
 
-            if dataId in STSlabels.keys():
-                states[dataId] = True if command == 'on' else False
+            if dataId in states.keys():
+                if command == 'on':
+                    states[dataId] = True
+                elif command == 'off':
+                    states[dataId] = False
+                else:
+                    self.datums.pop(dataId, None)
             else:
-                return '%d not in alert' % dataId
+                return 'dataId : %d not in alert' % dataId
 
         writeState(states)
-        self.sendAlertMsg(mess=mess, alertMsg="Alert %d:%s  %s" % (dataId, STSlabels[dataId], command))
+        self.sendAlertMsg(mess=mess, alertMsg="Alert dataId : %d  %s" % (dataId, command))
 
         return ''
 
@@ -205,10 +146,6 @@ class AlertsBot(JabberBot):
             self._set_alert()
             self.checkAlerts()
 
-        if self.PING_FREQUENCY and time.time() - self.get_timeout() > self.TIMEOUT_FREQ:
-            self._set_timeout()
-            self.checkTimeout()
-
         if self.PING_FREQUENCY and time.time() - self.get_awake() > 5:
             self._send_status()
 
@@ -217,7 +154,7 @@ class AlertsBot(JabberBot):
 
     def checkAlerts(self, doSend=True):
         datums = self.loadDatums()
-        self.modes, states = loadAlarmState(oldModes=self.modes)
+        states = readState()
 
         alerts = []
         for datum in datums:
@@ -226,30 +163,18 @@ class AlertsBot(JabberBot):
             except ValueError:
                 continue
 
-            state = True if datum.id not in states.keys() else states[datum.id]
+            if datum.id not in states.keys():
+                states[datum.id] = True
+                writeState(states)
+
+            state = states[datum.id]
 
             if state and status != "OK":
                 alerts.append(datum.id)
                 if doSend:
-                    self.sendAlertMsg(alertMsg='%d : %s \n -= %s =-' % (datum.id,
-                                                                        STSlabels[datum.id],
-                                                                        status))
+                    self.sendAlertMsg(alertMsg='dataId : %d \n -= %s =-' % (datum.id,
+                                                                            status))
         return alerts
-
-    def checkTimeout(self, doSend=True):
-        timeoutAck = readTimeout()
-        timeout = []
-        for datum in self.datums.values():
-            delta = time.time() - datum.timestamp
-
-            if delta > AlertsBot.TIMEOUT_LIM and datum.id not in timeoutAck:
-                timeout.append(datum.id)
-
-                if doSend:
-                    self.sendAlertMsg(alertMsg='%d : %s \n -= NO DATA since %ds =-' % (datum.id,
-                                                                                       STSlabels[datum.id],
-                                                                                       delta))
-        return timeout
 
     def sendAlertMsg(self, mess=False, alertMsg=''):
         userAlert = self.unPickle("userAlarm")
@@ -277,7 +202,7 @@ class AlertsBot(JabberBot):
         for datum in datums:
             self.datums[datum.id] = datum
 
-        return [self.datums[datum.id] for datum in datums]
+        return self.datums.values()
 
     def unPickle(self, filepath):
         try:
