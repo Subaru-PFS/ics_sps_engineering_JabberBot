@@ -21,7 +21,6 @@ import pickle
 import random
 import time
 from datetime import datetime as dt
-
 from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
 
 from myjabberbot import JabberBot, botcmd
@@ -104,34 +103,27 @@ class AlertsBot(JabberBot):
         states = readState()
 
         if dataId == 'all':
-            dataId = -1
             if command == 'on':
-                alerts = [k for k in states.keys() if isinstance(k, int)]
-                bool = True
-            elif command == 'off':
-                alerts = self.checkAlerts(doSend=False)
-                bool = False
+                dataIds = [k for k in states.keys() if isinstance(k, int)]
             else:
-                alerts = []
-                self.datums = {}
-
-            for alert in alerts:
-                states[alert] = bool
+                dataIds = self.checkAlerts(doSend=False)
         else:
             try:
-                dataId = int(dataId)
+                dataIds = [int(dataId)]
             except ValueError:
                 return 'invalid STS dataID'
 
-            if dataId in states.keys():
-                if command == 'on':
-                    states[dataId] = True
-                elif command == 'off':
-                    states[dataId] = False
-                else:
-                    self.datums.pop(dataId, None)
-            else:
+        for dataId in dataIds:
+            if dataId not in states.keys():
                 return 'dataId : %d not in alert' % dataId
+
+            if command == 'on':
+                self.datums.pop(dataId, None)
+                states[dataId] = True
+            elif command == 'off':
+                states[dataId] = False
+            else:
+                self.datums.pop(dataId, None)
 
         writeState(states)
         self.sendAlertMsg(mess=mess, alertMsg="Alert dataId : %d  %s" % (dataId, command))
@@ -196,13 +188,20 @@ class AlertsBot(JabberBot):
             self.doPickle('userAlert', userAlert)
 
     def loadDatums(self):
-        datums = self.unPickle('/software/ait/alarm/datum.pickle')
-        self.doPickle('/software/ait/alarm/datum.pickle', [])
+        datums = self.unPickle('/home/arnaud/software/ait/alarm/datum.pickle')
+        self.doPickle('/home/arnaud/software/ait/alarm/datum.pickle', [])
 
-        for datum in datums:
+        for datum in sorted(datums, key=lambda x: x.timestamp):
+            if datum.id in dicta.keys() and (self.inAlert(dicta[datum.id]) and not self.inAlert(datum)):
+                continue
+
             self.datums[datum.id] = datum
 
         return self.datums.values()
+
+    def inAlert(self, datum):
+        value, status = datum.value
+        return status != 'OK'
 
     def unPickle(self, filepath):
         try:
