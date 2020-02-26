@@ -20,10 +20,29 @@ import logging
 import pickle
 import random
 import time
+import os
+import yaml
+import collections
 from datetime import datetime as dt
 from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
 
 from sps_engineering_JabberBot.jabberbot import JabberBot, botcmd
+from alertsActor.STSpy.radio import Radio
+
+def loadSTSHelp():
+    with open(os.path.expandvars('$ICS_ALERTSACTOR_DIR/config/STS.yaml'), 'r') as cfgFile:
+        cfg = yaml.load(cfgFile)
+
+    stsHelp = dict()
+
+    for actorCfg in cfg['actors'].values():
+        for stsData in sum([data for data in actorCfg.values()], []):
+            stsHelp[int(stsData['stsId'])] = stsData['stsHelp']
+
+    return stsHelp
+
+
+STSHelp = loadSTSHelp()
 
 
 class AlertsBot(JabberBot):
@@ -34,6 +53,7 @@ class AlertsBot(JabberBot):
 
     def __init__(self, jid, password):
         self.datums = {}
+        self.stsHelp = loadSTSHelp()
         self.log = logging.getLogger('JabberBot.AlertsBot')
         self.thread_killed = False
 
@@ -82,9 +102,9 @@ class AlertsBot(JabberBot):
     def alerts_info(self, mess, args):
         """list and states of devices that can be set in alert"""
         states = readState()
-        states = dict([(k, v) for k, v in states.items() if isinstance(k, int)])
+        states = collections.OrderedDict(sorted([(k, v) for k, v in states.items() if isinstance(k, int)]))
 
-        ret = [' dataId : %d = %s' % (dataId, bool) for dataId, bool in states.items()]
+        ret = [' %d, %s = %s' % (dataId, self.stsHelp[dataId], bool) for dataId, bool in states.items()]
 
         return '\n' + '\n'.join(ret)
 
@@ -164,8 +184,9 @@ class AlertsBot(JabberBot):
             if state and status != "OK":
                 alerts.append(datum.id)
                 if doSend:
-                    self.sendAlertMsg(alertMsg='dataId : %d \n -= %s =-' % (datum.id,
-                                                                            status))
+                    alertMsg = '-=%d, %s =-\n %s   %s' % (datum.id, self.stsHelp[datum.id],
+                                                          dt.fromtimestamp(datum.timestamp), status)
+                    self.sendAlertMsg(alertMsg=alertMsg)
         return alerts
 
     def sendAlertMsg(self, mess=False, alertMsg=''):
@@ -188,11 +209,12 @@ class AlertsBot(JabberBot):
             self.doPickle('userAlert', userAlert)
 
     def loadDatums(self):
-        datums = self.unPickle('/home/arnaud/software/ait/alarm/datum.pickle')
-        self.doPickle('/home/arnaud/software/ait/alarm/datum.pickle', [])
+        datums = [Radio.unpack(packet) for packet in self.unPickle('/software/ait/alarm/packets.pickle')]
+
+        self.doPickle('/software/ait/alarm/packets.pickle', [])
 
         for datum in sorted(datums, key=lambda x: x.timestamp):
-            if datum.id in dicta.keys() and (self.inAlert(dicta[datum.id]) and not self.inAlert(datum)):
+            if datum.id in self.datums.keys() and (self.inAlert(self.datums[datum.id]) and not self.inAlert(datum)):
                 continue
 
             self.datums[datum.id] = datum
