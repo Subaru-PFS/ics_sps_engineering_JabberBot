@@ -16,7 +16,7 @@ class StoppableThread(threading.Thread):
             self.bot.thread_proc()
             self._stopevent.wait(self._sleepperiod)
         else:
-            print "%s   Thread finished" % dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print("%s   Thread finished" % dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     def join(self, timeout=None):
         """ Stop the thread and wait for it to end. """

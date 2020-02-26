@@ -2,8 +2,8 @@ import logging
 import time
 from datetime import datetime as dt
 
-from alertsbot import AlertsBot
-from mythread import pingXmpp
+from sps_engineering_JabberBot.alertsbot import AlertsBot
+from sps_engineering_JabberBot.thread import pingXmpp
 
 
 def runBot(args):

@@ -23,7 +23,7 @@ import time
 from datetime import datetime as dt
 from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
 
-from myjabberbot import JabberBot, botcmd
+from sps_engineering_JabberBot.jabberbot import JabberBot, botcmd
 
 
 class AlertsBot(JabberBot):
