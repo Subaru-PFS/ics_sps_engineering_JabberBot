@@ -92,7 +92,7 @@ class JabberBot(object):
     MSG_ERROR_OCCURRED = 'Sorry for your inconvenience. ' \
                          'An unexpected error occurred.'
 
-    PING_FREQUENCY = 15  # Set to the number of seconds, e.g. 60.
+    PING_FREQUENCY = 10  # Set to the number of seconds, e.g. 60.
     PING_TIMEOUT = 5  # Seconds to wait for a response.
 
     def __init__(self, username, password, res=None, debug=False,
@@ -144,9 +144,6 @@ class JabberBot(object):
         self.__seen = {}
         self.__threads = {}
         self.__lastping = time.time()
-        self.__lastawake = time.time()
-        self.__lastalert = time.time()
-        self.__lasttimeout = time.time()
         self.__privatedomain = privatedomain
         self.__acceptownmsgs = acceptownmsgs
         self.__command_prefix = command_prefix
@@ -171,7 +168,6 @@ class JabberBot(object):
         """Send status to everyone"""
         self.conn.send(xmpp.dispatcher.Presence(show=self.__show,
                                                 status=self.__status))
-        self.__lastawake = time.time()
 
     def __set_status(self, value):
         """Set status message.
@@ -765,20 +761,6 @@ class JabberBot(object):
     def get_ping(self):
         return self.__lastping
 
-    def get_awake(self):
-        return self.__lastawake
-
-    def get_alert(self):
-        return self.__lastalert
-
-    def get_timeout(self):
-        return self.__lasttimeout
-
-    def _set_alert(self):
-        self.__lastalert = time.time()
-
-    def _set_timeout(self):
-        self.__lasttimeout = time.time()
 
     def formatException(self, e):
         """ Format the caught exception as a string

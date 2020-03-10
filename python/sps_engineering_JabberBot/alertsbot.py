@@ -16,45 +16,25 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import logging
-import pickle
-import random
-import time
-import os
-import yaml
 import collections
+import logging
+import time
+from alertsActor.STSpy import STSBuffer
 from datetime import datetime as dt
-from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
-
 from sps_engineering_JabberBot.jabberbot import JabberBot, botcmd
-from alertsActor.STSpy.radio import Radio
-
-def loadSTSHelp():
-    with open(os.path.expandvars('$ICS_ALERTSACTOR_DIR/config/STS.yaml'), 'r') as cfgFile:
-        cfg = yaml.load(cfgFile)
-
-    stsHelp = dict()
-
-    for actorCfg in cfg['actors'].values():
-        for stsData in sum([data for data in actorCfg.values()], []):
-            stsHelp[int(stsData['stsId'])] = stsData['stsHelp']
-
-    return stsHelp
-
-
-STSHelp = loadSTSHelp()
+from sps_engineering_JabberBot.utils import loadSTSHelp, inAlert, loadDatums, unPickle, doPickle
+from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
 
 
 class AlertsBot(JabberBot):
     """This is a simple broadcasting client """
-    TIMEOUT_LIM = 150
     ALERT_FREQ = 30
-    TIMEOUT_FREQ = 60
 
     def __init__(self, jid, password):
         self.datums = {}
         self.stsHelp = loadSTSHelp()
         self.log = logging.getLogger('JabberBot.AlertsBot')
+        self.stsBuffer = STSBuffer(self.log)
         self.thread_killed = False
 
         JabberBot.__init__(self, jid, password)
@@ -64,7 +44,7 @@ class AlertsBot(JabberBot):
     @botcmd
     def alert_mode(self, mess, args):
         """Be noticed by the alarms args : on/off"""
-        userAlert = self.unPickle("userAlarm")
+        userAlert = self.getUserAlert()
 
         args = str(args)
         if args in ['on', 'off']:
@@ -81,7 +61,7 @@ class AlertsBot(JabberBot):
                     msg = "You aren't on alert MODE anymore !"
                 else:
                     msg = "Are you kidding me !?"
-            self.doPickle('userAlarm', userAlert)
+            self.setUserAlert(userAlert)
             return msg
         else:
             return 'unknown args'
@@ -92,7 +72,7 @@ class AlertsBot(JabberBot):
     @botcmd
     def alert_msg(self, mess, args):
         """Sends out a broadcast to users on ALERT, supply message as arguments (e.g. broadcast hello)"""
-        self.sendAlertMsg(mess=mess, alertMsg='broadcast: %s' % args)
+        self.broadcastAlert(mess=mess, alertMsg=args)
 
     @botcmd(hidden=True)
     def kill(self, mess, args):
@@ -126,7 +106,7 @@ class AlertsBot(JabberBot):
             if command == 'on':
                 dataIds = [k for k in states.keys() if isinstance(k, int)]
             else:
-                dataIds = self.checkAlerts(doSend=False)
+                dataIds = self.stsBuffer.sent.keys()
         else:
             try:
                 dataIds = [int(dataId)]
@@ -146,29 +126,37 @@ class AlertsBot(JabberBot):
                 self.datums.pop(dataId, None)
 
         writeState(states)
-        self.sendAlertMsg(mess=mess, alertMsg="Alert dataId : %d  %s" % (dataId, command))
+        self.broadcastAlert(mess=mess,
+                            alertMsg='\n'.join(
+                                ['%d, %s = %s' % (dataId, self.stsHelp[dataId], command) for dataId in dataIds]))
 
         return ''
 
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.get_ping() > self.PING_FREQUENCY:
             self._idle_ping()
-
-        if self.PING_FREQUENCY and time.time() - self.get_alert() > self.ALERT_FREQ:
-            self._set_alert()
-            self.checkAlerts()
-
-        if self.PING_FREQUENCY and time.time() - self.get_awake() > 5:
             self._send_status()
+            self.handleAlerts()
 
     def thread_proc(self):
         pass
 
-    def checkAlerts(self, doSend=True):
-        datums = self.loadDatums()
+    def handleAlerts(self):
+        self.checkAlerts()
+        toSend = self.stsBuffer.filterTraffic()
+
+        for datum in toSend:
+            value, status = datum.value
+            header = '-=%d, %s =-' % (datum.id, self.stsHelp[datum.id])
+            text = '%s   %s' % (dt.fromtimestamp(datum.timestamp), status)
+            self.sendAlert(alertMsg='\n'.join([header, text]))
+
+        self.stsBuffer.clear()
+
+    def checkAlerts(self):
+        datums = self.retrieveDatums()
         states = readState()
 
-        alerts = []
         for datum in datums:
             try:
                 value, status = datum.value
@@ -182,59 +170,40 @@ class AlertsBot(JabberBot):
             state = states[datum.id]
 
             if state and status != "OK":
-                alerts.append(datum.id)
-                if doSend:
-                    alertMsg = '-=%d, %s =-\n %s   %s' % (datum.id, self.stsHelp[datum.id],
-                                                          dt.fromtimestamp(datum.timestamp), status)
-                    self.sendAlertMsg(alertMsg=alertMsg)
-        return alerts
+                self.stsBuffer.append(datum)
 
-    def sendAlertMsg(self, mess=False, alertMsg=''):
-        userAlert = self.unPickle("userAlarm")
+    def broadcastAlert(self, mess, alertMsg):
+        header = '%s %s:' % (str(mess.getFrom().getNode()), dt.fromtimestamp(time.time()))
+        self.sendAlert('\n'.join([header, alertMsg]))
 
-        for m in alertMsg.split('\r\n'):
-            self.log.debug(m)
-
-        alertMsg += ("  by %s  on %s" % (str(mess.getFrom().getNode()), dt.now().isoformat()[:19]) if mess else '')
+    def sendAlert(self, alertMsg):
+        userAlert = self.getUserAlert()
+        self.log.debug(alertMsg)
 
         for jid in userAlert.values():
             self.send(jid, alertMsg)
 
     def updateJID(self, jid):
-        userAlert = self.unPickle("userAlarm")
+        userAlert = self.getUserAlert()
         user = jid.getNode()
         self.log.info('updating jid : %s for user %s' % (jid, user))
         if user in userAlert.iterkeys() and userAlert[user] != jid:
             userAlert[user] = jid
-            self.doPickle('userAlert', userAlert)
+            self.setUserAlert(userAlert)
 
-    def loadDatums(self):
-        datums = [Radio.unpack(packet) for packet in self.unPickle('/software/ait/alarm/packets.pickle')]
+    def getUserAlert(self):
+        return unPickle('userAlert')
 
-        self.doPickle('/software/ait/alarm/packets.pickle', [])
+    def setUserAlert(self, userAlert):
+        return doPickle('userAlert', userAlert)
 
-        for datum in sorted(datums, key=lambda x: x.timestamp):
-            if datum.id in self.datums.keys() and (self.inAlert(self.datums[datum.id]) and not self.inAlert(datum)):
+    def retrieveDatums(self):
+        datums = loadDatums()
+
+        for datum in datums:
+            if datum.id in self.datums.keys() and (inAlert(self.datums[datum.id]) and not inAlert(datum)):
                 continue
 
             self.datums[datum.id] = datum
 
         return self.datums.values()
-
-    def inAlert(self, datum):
-        value, status = datum.value
-        return status != 'OK'
-
-    def unPickle(self, filepath):
-        try:
-            with open(filepath, 'rb') as thisFile:
-                unpickler = pickle.Unpickler(thisFile)
-                return unpickler.load()
-        except EOFError:
-            time.sleep(0.1 + random.random())
-            return self.unPickle(filepath=filepath)
-
-    def doPickle(self, filepath, var):
-        with open(filepath, 'wb') as thisFile:
-            pickler = pickle.Pickler(thisFile, protocol=2)
-            pickler.dump(var)
