@@ -19,10 +19,9 @@
 import collections
 import logging
 import time
-from alertsActor.STSpy import STSBuffer
 from datetime import datetime as dt
 from sps_engineering_JabberBot.jabberbot import JabberBot, botcmd
-from sps_engineering_JabberBot.utils import loadSTSHelp, inAlert, loadDatums, unPickle, doPickle
+from sps_engineering_JabberBot.utils import loadSTSHelp, inAlert, loadDatums, unPickle, doPickle, AlertBuffer
 from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
 
 
@@ -34,7 +33,7 @@ class AlertsBot(JabberBot):
         self.datums = {}
         self.stsHelp = loadSTSHelp()
         self.log = logging.getLogger('JabberBot.AlertsBot')
-        self.stsBuffer = STSBuffer(self.log)
+        self.alertBuffer = AlertBuffer()
         self.thread_killed = False
 
         JabberBot.__init__(self, jid, password)
@@ -106,7 +105,7 @@ class AlertsBot(JabberBot):
             if command == 'on':
                 dataIds = [k for k in states.keys() if isinstance(k, int)]
             else:
-                dataIds = self.stsBuffer.sent.keys()
+                dataIds = self.alertBuffer.current.keys()
         else:
             try:
                 dataIds = [int(dataId)]
@@ -143,7 +142,7 @@ class AlertsBot(JabberBot):
 
     def handleAlerts(self):
         self.checkAlerts()
-        toSend = self.stsBuffer.filterTraffic()
+        toSend = self.alertBuffer.filterTraffic()
 
         for datum in toSend:
             value, status = datum.value
@@ -151,7 +150,7 @@ class AlertsBot(JabberBot):
             text = '%s   %s' % (dt.fromtimestamp(datum.timestamp), status)
             self.sendAlert(alertMsg='\n'.join([header, text]))
 
-        self.stsBuffer.clear()
+        self.alertBuffer.clear()
 
     def checkAlerts(self):
         datums = self.retrieveDatums()
@@ -170,7 +169,7 @@ class AlertsBot(JabberBot):
             state = states[datum.id]
 
             if state and status != "OK":
-                self.stsBuffer.append(datum)
+                self.alertBuffer.append(datum)
 
     def broadcastAlert(self, mess, alertMsg):
         header = '%s %s:' % (str(mess.getFrom().getNode()), dt.fromtimestamp(time.time()))

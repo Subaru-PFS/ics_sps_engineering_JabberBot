@@ -1,4 +1,5 @@
 setupRequired(ics_sps_engineering_Lib_dataQuery -j 1.1.2)
-setupRequired(ics_alertsActor -j server)
+setupRequired(ics_alertsActor)
+setupRequired(STSpy)
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)

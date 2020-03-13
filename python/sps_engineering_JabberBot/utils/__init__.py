@@ -4,7 +4,50 @@ import random
 import time
 
 import yaml
-from alertsActor.STSpy.radio import Radio
+from STSpy.radio import Radio
+
+
+class AlertBuffer(list):
+    samplingTime = 300
+
+    def __init__(self):
+        list.__init__(self)
+        self.sent = dict()
+
+    @property
+    def current(self):
+        return dict([(k, v) for k, v in self.sent.items() if (time.time() - v.sendTime) <= AlertBuffer.samplingTime])
+
+    def filterTraffic(self):
+        return [datum for datum in self.__iter__() if self.doSend(datum)]
+
+    def check(self, datum):
+        try:
+            prev = self.sent[datum.id]
+        except KeyError:
+            return True
+
+        if (time.time() - prev.sendTime) > AlertBuffer.samplingTime:
+            return True
+
+        prevValue, prevState = prev.value
+        currValue, currState = datum.value
+
+        if (currState != 'OK' and prevState == 'OK') or (currState == 'OK' and prevState != 'OK'):
+            return True
+
+        return False
+
+    def doSend(self, datum):
+        doSend = self.check(datum)
+        if doSend:
+            datum.sendTime = time.time()
+            self.sent[datum.id] = datum
+
+        return doSend
+
+    def clear(self):
+        del self[:]
 
 
 def loadSTSHelp():
