@@ -68,23 +68,26 @@ def inAlert(datum):
     return status != 'OK'
 
 
-def unPickle(filepath):
+def unPickle(filename, folder='/software/ait/alarm'):
+    filepath = os.path.join(folder, filename)
+
     try:
         with open(filepath, 'rb') as thisFile:
             unpickler = pickle.Unpickler(thisFile)
             return unpickler.load()
     except EOFError:
         time.sleep(0.1 + random.random())
-        return unPickle(filepath=filepath)
+        return unPickle(filename, folder)
 
 
-def doPickle(filepath, var):
+def doPickle(filename, var, folder='/software/ait/alarm'):
+    filepath = os.path.join(folder, filename)
     with open(filepath, 'wb') as thisFile:
         pickler = pickle.Pickler(thisFile, protocol=2)
         pickler.dump(var)
 
 
 def loadDatums():
-    datums = [Radio.unpack(packet) for packet in unPickle('/software/ait/alarm/packets.pickle')]
-    doPickle('/software/ait/alarm/packets.pickle', [])
+    datums = [Radio.unpack(packet) for packet in unPickle('packets.pickle')]
+    doPickle('packets.pickle', [])
     return sorted(datums, key=lambda x: x.timestamp)
