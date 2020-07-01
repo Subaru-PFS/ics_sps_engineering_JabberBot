@@ -1,0 +1,1 @@
+/usr/bin/python -m sps_engineering_JabberBot.main "$@"
