@@ -3,7 +3,7 @@ import pickle
 import random
 import time
 
-import yaml
+import pfs.instdata.io as fileIO
 from STSpy.radio import Radio
 
 
@@ -51,12 +51,11 @@ class AlertBuffer(list):
 
 
 def loadSTSHelp():
-    with open(os.path.expandvars('$ICS_ALERTSACTOR_DIR/config/STS.yaml'), 'r') as cfgFile:
-        cfg = yaml.load(cfgFile)
+    stsCfg = fileIO.loadConfig('STS', subDirectory='alerts')
 
     stsHelp = dict()
 
-    for actorCfg in cfg['actors'].values():
+    for actorCfg in stsCfg['actors'].values():
         for stsData in sum([data for data in actorCfg.values()], []):
             stsHelp[int(stsData['stsId'])] = stsData['stsHelp']
 
