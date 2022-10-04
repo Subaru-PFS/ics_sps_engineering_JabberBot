@@ -109,6 +109,7 @@ def doPickle(filename, var, folder='/software/ait/alerts'):
 
 
 def loadDatums():
-    datums = [Radio.unpack(packet) for packet in unPickle('packets.pickle', retType=list)]
-    doPickle('packets.pickle', [])
+    packets = unPickle('packets', retType=list)
+    datums = [Radio.unpack(packet) for packet in packets]
+    doPickle('packets', [])
     return sorted(datums, key=lambda x: x.timestamp)
