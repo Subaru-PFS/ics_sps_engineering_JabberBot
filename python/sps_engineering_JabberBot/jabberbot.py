@@ -537,6 +537,10 @@ class JabberBot(object):
         type = mess.getType()
         jid = mess.getFrom()
         props = mess.getProperties()
+        body = mess.getBody()
+        # it turns out that body can be void, so need to catch that.
+        if not body:
+            return
         text = mess.getBody().strip()
         username = self.get_sender_username(mess)
 
