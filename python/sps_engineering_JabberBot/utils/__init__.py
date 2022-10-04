@@ -3,9 +3,8 @@ import pickle
 import random
 import time
 
-import pfs.instdata.io as fileIO
 from STSpy.radio import Radio
-
+import yaml
 
 class AlertBuffer(list):
     samplingTime = 300
@@ -51,7 +50,10 @@ class AlertBuffer(list):
 
 
 def loadSTSHelp():
-    stsCfg = fileIO.loadConfig('STS', subDirectory='alerts')
+    """"""
+    # Cannot pfs_insdata func, because we're using /usr/bin/python and pfs_instdata is python3 no (__init__.py) meh...
+    with open(os.path.expandvars('$PFS_INSTDATA_DIR/config/STS.yaml'), 'r') as cfgFile:
+        stsCfg = yaml.load(cfgFile)
 
     stsHelp = dict()
 
