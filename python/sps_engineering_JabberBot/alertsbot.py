@@ -20,9 +20,10 @@ import collections
 import logging
 import time
 from datetime import datetime as dt
+
 from sps_engineering_JabberBot.jabberbot import JabberBot, botcmd
-from sps_engineering_JabberBot.utils import loadSTSHelp, inAlert, loadDatums, unPickle, doPickle, AlertBuffer
-from sps_engineering_Lib_dataQuery.confighandler import readState, writeState
+from sps_engineering_JabberBot.utils import loadSTSHelp, inAlert, loadDatums, AlertBuffer, readState, writeState, \
+    getUserAlert, setUserAlert
 
 
 class AlertsBot(JabberBot):
@@ -43,7 +44,7 @@ class AlertsBot(JabberBot):
     @botcmd
     def alert_mode(self, mess, args):
         """Be noticed by the alarms args : on/off"""
-        userAlert = self.getUserAlert()
+        userAlert = getUserAlert()
 
         args = str(args)
         if args in ['on', 'off']:
@@ -60,7 +61,7 @@ class AlertsBot(JabberBot):
                     msg = "You aren't on alert MODE anymore !"
                 else:
                     msg = "Are you kidding me !?"
-            self.setUserAlert(userAlert)
+            setUserAlert(userAlert)
             return msg
         else:
             return 'unknown args'
@@ -153,6 +154,7 @@ class AlertsBot(JabberBot):
         self.alertBuffer.clear()
 
     def checkAlerts(self):
+        doWrite = False
         datums = self.retrieveDatums()
         states = readState()
 
@@ -164,37 +166,34 @@ class AlertsBot(JabberBot):
 
             if datum.id not in states.keys():
                 states[datum.id] = True
-                writeState(states)
+                doWrite = True
 
             state = states[datum.id]
 
             if state and status != "OK":
                 self.alertBuffer.append(datum)
 
+        if doWrite:
+            writeState(states)
+
     def broadcastAlert(self, mess, alertMsg):
         header = '%s %s:' % (str(mess.getFrom().getNode()), dt.fromtimestamp(time.time()))
         self.sendAlert('\n'.join([header, alertMsg]))
 
     def sendAlert(self, alertMsg):
-        userAlert = self.getUserAlert()
+        userAlert = getUserAlert()
         self.log.debug(alertMsg)
 
         for jid in userAlert.values():
             self.send(jid, alertMsg)
 
     def updateJID(self, jid):
-        userAlert = self.getUserAlert()
+        userAlert = getUserAlert()
         user = jid.getNode()
         self.log.info('updating jid : %s for user %s' % (jid, user))
         if user in userAlert.iterkeys() and userAlert[user] != jid:
             userAlert[user] = jid
-            self.setUserAlert(userAlert)
-
-    def getUserAlert(self):
-        return unPickle('userAlert')
-
-    def setUserAlert(self, userAlert):
-        return doPickle('userAlert', userAlert)
+            setUserAlert(userAlert)
 
     def retrieveDatums(self):
         datums = loadDatums()

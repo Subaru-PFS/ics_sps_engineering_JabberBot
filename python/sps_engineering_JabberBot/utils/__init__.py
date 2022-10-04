@@ -3,8 +3,9 @@ import pickle
 import random
 import time
 
-from STSpy.radio import Radio
 import yaml
+from STSpy.radio import Radio
+
 
 class AlertBuffer(list):
     samplingTime = 300
@@ -69,8 +70,24 @@ def inAlert(datum):
     return status != 'OK'
 
 
-def unPickle(filename, folder='/software/ait/alarm'):
-    filepath = os.path.join(folder, filename)
+def getUserAlert():
+    return unPickle('userAlert')
+
+
+def setUserAlert(userAlert):
+    return doPickle('userAlert', userAlert)
+
+
+def readState():
+    return unPickle('state')
+
+
+def writeState(state):
+    return doPickle('state', state)
+
+
+def unPickle(filename, folder='/software/ait/alerts', retType=dict):
+    filepath = os.path.join(folder, '%s.pickle' % filename)
 
     try:
         with open(filepath, 'rb') as thisFile:
@@ -79,16 +96,19 @@ def unPickle(filename, folder='/software/ait/alarm'):
     except EOFError:
         time.sleep(0.1 + random.random())
         return unPickle(filename, folder)
+    except IOError:
+        return retType()
 
 
-def doPickle(filename, var, folder='/software/ait/alarm'):
-    filepath = os.path.join(folder, filename)
+def doPickle(filename, var, folder='/software/ait/alerts'):
+    filepath = os.path.join(folder, '%s.pickle' % filename)
+
     with open(filepath, 'wb') as thisFile:
         pickler = pickle.Pickler(thisFile, protocol=2)
         pickler.dump(var)
 
 
 def loadDatums():
-    datums = [Radio.unpack(packet) for packet in unPickle('packets.pickle')]
+    datums = [Radio.unpack(packet) for packet in unPickle('packets.pickle', retType=list)]
     doPickle('packets.pickle', [])
     return sorted(datums, key=lambda x: x.timestamp)
