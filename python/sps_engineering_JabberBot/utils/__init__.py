@@ -52,7 +52,7 @@ class AlertBuffer(list):
 def loadSTSHelp():
     """"""
     # Cannot pfs_insdata func, because we're using /usr/bin/python and pfs_instdata is python3 no (__init__.py) meh...
-    with open(os.path.expandvars('$PFS_INSTDATA_DIR/config/STS.yaml'), 'r') as cfgFile:
+    with open(os.path.expandvars('$PFS_INSTDATA_DIR/config/alerts/STS.yaml'), 'r') as cfgFile:
         stsCfg = yaml.load(cfgFile)
 
     stsHelp = dict()
