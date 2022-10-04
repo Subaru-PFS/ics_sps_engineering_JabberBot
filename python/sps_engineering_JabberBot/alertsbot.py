@@ -132,6 +132,13 @@ class AlertsBot(JabberBot):
 
         return ''
 
+    @botcmd
+    def summary(self, mess, args):
+        """return latest telemetry values."""
+        sortedByStsIds = collections.OrderedDict(sorted(self.datums.items()))
+        allMsg = [self.datumToMsg(datum, includeValue=True) for datum in sortedByStsIds.values()]
+        return '\n' + '\r\n'.join(allMsg)
+
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.get_ping() > self.PING_FREQUENCY:
             self._idle_ping()
@@ -141,15 +148,23 @@ class AlertsBot(JabberBot):
     def thread_proc(self):
         pass
 
+    def datumToMsg(self, datum, includeValue=False):
+        value, status = datum.value
+        header = '-=%d, %s =-' % (datum.id, self.stsHelp[datum.id])
+        timestamp = str(dt.fromtimestamp(datum.timestamp))
+        toJoin = [timestamp, '%g' % value, status] if includeValue else [timestamp, status]
+        text = '   '.join(toJoin)
+        msg = '\n'.join([header, text])
+        return msg
+
     def handleAlerts(self):
         self.checkAlerts()
         toSend = self.alertBuffer.filterTraffic()
+        sortedByStsIds = collections.OrderedDict(sorted([(datum.id, datum) for datum in toSend]))
 
-        for datum in toSend:
-            value, status = datum.value
-            header = '-=%d, %s =-' % (datum.id, self.stsHelp[datum.id])
-            text = '%s   %s' % (dt.fromtimestamp(datum.timestamp), status)
-            self.sendAlert(alertMsg='\n'.join([header, text]))
+        for datum in sortedByStsIds.values():
+            alertMsg = self.datumToMsg(datum)
+            self.sendAlert(alertMsg=alertMsg)
 
         self.alertBuffer.clear()
 
