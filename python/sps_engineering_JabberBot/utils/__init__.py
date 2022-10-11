@@ -54,11 +54,16 @@ def loadSTSHelp():
     """"""
     # Cannot pfs_insdata func, because we're using /usr/bin/python and pfs_instdata is python3 no (__init__.py) meh...
     with open(os.path.expandvars('$PFS_INSTDATA_DIR/config/alerts/STS.yaml'), 'r') as cfgFile:
-        stsCfg = yaml.load(cfgFile)
+        stsCfg = yaml.load(cfgFile)['actors']
+
+    with open(os.path.expandvars('$PFS_INSTDATA_DIR/config/alerts/AIT@LAM.yaml'), 'r') as cfgFile:
+        lamCfg = yaml.load(cfgFile)['actors']
+
+    stsCfg.update(lamCfg)
 
     stsHelp = dict()
 
-    for actorCfg in stsCfg['actors'].values():
+    for actorCfg in stsCfg.values():
         for stsData in sum([data for data in actorCfg.values()], []):
             stsHelp[int(stsData['stsId'])] = stsData['stsHelp']
 
