@@ -139,6 +139,14 @@ class AlertsBot(JabberBot):
         allMsg = [self.datumToMsg(datum, includeValue=True) for datum in sortedByStsIds.values()]
         return '\n' + '\r\n'.join(allMsg)
 
+    @botcmd
+    def short(self, mess, args):
+        """return latest compact telemetry values."""
+        sortedByStsIds = collections.OrderedDict(sorted(self.datums.items()))
+        allMsg = [self.datumToShortMsg(datum, includeValue=True) for datum in sortedByStsIds.values()]
+        return '\n' + '\r\n'.join(allMsg)
+
+
     def idle_proc(self):
         if self.PING_FREQUENCY and time.time() - self.get_ping() > self.PING_FREQUENCY:
             self._idle_ping()
@@ -156,6 +164,22 @@ class AlertsBot(JabberBot):
         text = '   '.join(toJoin)
         msg = '\n'.join([header, text])
         return msg
+    
+    def shortenMsg(self, stsHelp):
+        output = stsHelp.split(':')[1]
+        if "XCU_" in output:
+            output = output.split("XCU_")[1]
+        return output
+
+    def datumToShortMsg(self, datum, includeValue=False):
+        value, status = datum.value
+        header = '-= %s: %d, %s' % (status, datum.id, self.shortenMsg(self.stsHelp[datum.id]))
+        timestamp = str(dt.fromtimestamp(datum.timestamp))
+        toJoin = ['%g' % value, timestamp] if includeValue else [timestamp]
+        text = '  '.join(toJoin)
+        msg = '='.join([header, text]) + '=-'
+        return msg
+
 
     def handleAlerts(self):
         self.checkAlerts()
